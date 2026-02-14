@@ -189,7 +189,8 @@ python3 -u /path/to/login_worker.py
 
 ### Logs and errors
 
-- Logs: `logs/bot_errors.log` (and stdout). Rotate or truncate as needed.
+- **Log file**: under **project root**: `logs/bot_errors.log`. Same output goes to stdout. On startup the app prints the full path (e.g. `Log file: /path/to/rezabots/logs/bot_errors.log`).
+- For debugging “ورود به اکانت”: every incoming message is logged at DEBUG (`MSG chat_id=… text=…`), and when the login flow is entered you’ll see `login_entry called text=…`. If you see the MSG line but not `login_entry called`, the entry-point filter didn’t match.
 - Errors are logged with full detail; the user only sees a short Persian message.
 
 ### Database

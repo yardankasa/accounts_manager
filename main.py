@@ -21,7 +21,7 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 
-from core.config import BOT_TOKEN, SESSION_DIR
+from core.config import BOT_TOKEN, SESSION_DIR, LOGS_DIR
 from core import db
 from bot.logging_utils import setup_logging
 from bot.handlers_admin import cmd_admin, main_menu_back
@@ -55,11 +55,23 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
             pass
 
 
+async def _log_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log every incoming message (group -1, non-blocking) for debugging."""
+    if update.message and update.message.text is not None:
+        logger.debug(
+            "MSG chat_id=%s text=%r len=%s",
+            update.effective_chat.id if update.effective_chat else None,
+            update.message.text,
+            len(update.message.text),
+        )
+
+
 def main() -> None:
     setup_logging()
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN not set in .env")
         sys.exit(1)
+    logger.info("Logs dir: %s", LOGS_DIR.resolve())
 
     async def post_init(app: Application) -> None:
         SESSION_DIR.mkdir(parents=True, exist_ok=True)
@@ -84,6 +96,11 @@ def main() -> None:
     app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("admin", cmd_admin))
+    # Log every message (group -1) to debug "ورود به اکانت" not working
+    app.add_handler(
+        MessageHandler(filters.TEXT, _log_incoming_message, block=False),
+        group=-1,
+    )
     # Login conversation first so "📱 ورود به اکانت" is handled before other menu handlers
     app.add_handler(login_conversation_handler())
     app.add_handler(MessageHandler(

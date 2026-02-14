@@ -62,6 +62,7 @@ def _normalize_phone(text: str) -> str | None:
 
 # --- Entry: show node selection
 async def login_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("login_entry called text=%r", getattr(update.message, "text", None))
     if not update.message or not update.message.text:
         return ConversationHandler.END
     if not await ensure_admin(update, context):
@@ -266,10 +267,10 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def login_conversation_handler():
-    # Match message that contains "ورود به اکانت" (covers "📱 ورود به اکانت" and "ورود به اکانت")
+    # Entry: "ورود.*اکانت" so we match "📱 ورود به اکانت" even with encoding/emoji quirks
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.TEXT & filters.Regex("ورود به اکانت"), login_entry),
+            MessageHandler(filters.TEXT & filters.Regex(r"ورود.*اکانت"), login_entry),
         ],
         states={
             CHOOSE_NODE: [
