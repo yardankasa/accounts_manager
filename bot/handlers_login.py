@@ -17,7 +17,7 @@ import core.node_runner as node_runner
 from core.config import SESSION_DIR
 
 from .filters import ensure_admin
-from .keyboards import node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear, BACK_TO_MENU
+from .keyboards import LOGIN_BUTTON, node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .messages import (
     MSG_CHOOSE_NODE,
     MSG_NO_NODE_CAPACITY,
@@ -267,10 +267,11 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def login_conversation_handler():
-    # Entry: "ورود.*اکانت" so we match "📱 ورود به اکانت" even with encoding/emoji quirks
+    # PTB Regex uses re.match() (anchored at start). Message is "📱 ورود به اکانت" so allow leading chars.
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.TEXT & filters.Regex(r"ورود.*اکانت"), login_entry),
+            # MessageHandler(filters.TEXT & filters.Regex(r".*ورود.*اکانت"), login_entry),
+            MessageHandler(filters.TEXT(LOGIN_BUTTON),login_entry)
         ],
         states={
             CHOOSE_NODE: [
