@@ -1,7 +1,7 @@
 """Run Telethon login on main server (same process)."""
-import asyncio
 import logging
 from pathlib import Path
+from typing import Awaitable, Callable
 
 from telethon import TelegramClient
 from telethon.errors import (
@@ -11,25 +11,26 @@ from telethon.errors import (
     PasswordHashInvalidError,
 )
 
-from .config import API_ID, API_HASH
-
 logger = logging.getLogger(__name__)
 
 
 async def run_login_main(
     session_base_path: str,
     phone: str,
-    code_callback: "async def () -> str",
-    password_callback: "async def () -> str | None",
+    api_id: int,
+    api_hash: str,
+    code_callback: Callable[[], Awaitable[str]],
+    password_callback: Callable[[], Awaitable[str | None]],
 ) -> tuple[bool, str, str | None]:
     """
-    Run Telethon login locally. Returns (success, message_persian, session_path).
+    Run Telethon login locally. api_id/api_hash are per-account (from user).
+    Returns (success, message_persian, session_path).
     """
     base = Path(session_base_path)
     base.mkdir(parents=True, exist_ok=True)
     session_name = "".join(c for c in phone if c.isdigit()) or "session"
     session_path = str(base / session_name)
-    client = TelegramClient(session_path, API_ID, API_HASH)
+    client = TelegramClient(session_path, api_id, api_hash)
     try:
         await client.connect()
         if not await client.is_user_authorized():

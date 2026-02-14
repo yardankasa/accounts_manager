@@ -3,11 +3,12 @@ import asyncio
 import logging
 import tempfile
 from pathlib import Path
+from typing import Awaitable, Callable
 
 import asyncssh
 
 from . import db
-from .config import API_ID, API_HASH, _ROOT
+from .config import _ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +67,14 @@ async def run_login_on_node(
     node_id: int,
     phone: str,
     session_base_path: str,
+    api_id: int,
+    api_hash: str,
     code_callback: Callable[[], Awaitable[str]],
     password_callback: Callable[[], Awaitable[str | None]],
 ) -> tuple[bool, str, str | None]:
     """
     Run Telethon login on remote node. Uses login_worker.py on node.
+    api_id, api_hash: per-account credentials (from user, not .env).
     code_callback: async function that returns the code when asked.
     password_callback: async function that returns 2FA password or None.
     Returns (success, message_persian, session_path_on_node or None).
@@ -84,6 +88,8 @@ async def run_login_on_node(
         return await telethon_login.run_login_main(
             session_base_path=session_base_path,
             phone=phone,
+            api_id=api_id,
+            api_hash=api_hash,
             code_callback=code_callback,
             password_callback=password_callback,
         )
@@ -120,7 +126,7 @@ async def run_login_on_node(
                     Path(local_path).unlink(missing_ok=True)
             process = await conn.create_process(
                 f"python3 -u {remote_script_path}",
-                env={"API_ID": str(API_ID), "API_HASH": API_HASH, "TELEGRAM_PHONE": phone, "SESSION_BASE": session_base_path},
+                env={"API_ID": str(api_id), "API_HASH": api_hash, "TELEGRAM_PHONE": phone, "SESSION_BASE": session_base_path},
             )
             return await _bridge_process(process, code_callback, password_callback, session_base_path, phone)
         finally:

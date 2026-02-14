@@ -21,6 +21,10 @@ from .keyboards import node_choice_inline, back_keyboard, main_admin_keyboard
 from .messages import (
     MSG_CHOOSE_NODE,
     MSG_NO_NODE_CAPACITY,
+    MSG_ENTER_API_ID,
+    MSG_ENTER_API_HASH,
+    MSG_INVALID_API_ID,
+    MSG_INVALID_API_HASH,
     MSG_ENTER_PHONE,
     MSG_INVALID_PHONE,
     MSG_ENTER_CODE,
@@ -34,7 +38,7 @@ from .logging_utils import log_exception
 
 logger = logging.getLogger(__name__)
 
-CHOOSE_NODE, ENTER_PHONE, ENTER_CODE = range(3)
+CHOOSE_NODE, ENTER_API_ID, ENTER_API_HASH, ENTER_PHONE, ENTER_CODE = range(5)
 MAX_WRONG_CODE_ATTEMPTS = 2
 
 
@@ -91,7 +95,41 @@ async def login_choose_node_callback(update: Update, context: ContextTypes.DEFAU
         return CHOOSE_NODE
     context.user_data["_node_id"] = node_id
     context.user_data["_node"] = node
-    await q.edit_message_text(MSG_ENTER_PHONE, reply_markup=back_keyboard())
+    await q.edit_message_text(MSG_ENTER_API_ID, reply_markup=back_keyboard())
+    return ENTER_API_ID
+
+
+# --- Enter API_ID
+async def login_enter_api_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_admin(update, context):
+        return ConversationHandler.END
+    text = (update.message.text or "").strip()
+    if "انصراف" in text or "بازگشت" in text:
+        await update.message.reply_text(MSG_LOGIN_CANCELLED, reply_markup=main_admin_keyboard())
+        return ConversationHandler.END
+    try:
+        api_id = int(text)
+    except ValueError:
+        await update.message.reply_text(MSG_INVALID_API_ID)
+        return ENTER_API_ID
+    context.user_data["_api_id"] = api_id
+    await update.message.reply_text(MSG_ENTER_API_HASH)
+    return ENTER_API_HASH
+
+
+# --- Enter API_HASH
+async def login_enter_api_hash(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_admin(update, context):
+        return ConversationHandler.END
+    text = (update.message.text or "").strip()
+    if "انصراف" in text or "بازگشت" in text:
+        await update.message.reply_text(MSG_LOGIN_CANCELLED, reply_markup=main_admin_keyboard())
+        return ConversationHandler.END
+    if not text or len(text) < 10:
+        await update.message.reply_text(MSG_INVALID_API_HASH)
+        return ENTER_API_HASH
+    context.user_data["_api_hash"] = text
+    await update.message.reply_text(MSG_ENTER_PHONE, reply_markup=back_keyboard())
     return ENTER_PHONE
 
 
@@ -134,12 +172,17 @@ async def login_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["_password_future"] = fut
         return await fut
 
+    api_id = context.user_data["_api_id"]
+    api_hash = context.user_data["_api_hash"]
+
     async def run_and_finish():
         try:
             success, msg, session_path = await node_runner.run_login_on_node(
                 node_id=node_id,
                 phone=phone,
                 session_base_path=session_base,
+                api_id=api_id,
+                api_hash=api_hash,
                 code_callback=code_cb,
                 password_callback=pwd_cb,
             )
@@ -209,6 +252,12 @@ def login_conversation_handler():
         states={
             CHOOSE_NODE: [
                 CallbackQueryHandler(login_choose_node_callback, pattern="^node_"),
+            ],
+            ENTER_API_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, login_enter_api_id),
+            ],
+            ENTER_API_HASH: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, login_enter_api_hash),
             ],
             ENTER_PHONE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, login_enter_phone),
