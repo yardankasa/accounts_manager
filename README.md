@@ -203,6 +203,13 @@ python3 -u /path/to/login_worker.py
 - Ensure your Telegram user ID is in `ADMIN_IDS` (comma-separated, no spaces if you prefer).
 - Check `logs/bot_errors.log` and stdout for exceptions (e.g. DB connection).
 
+### TimedOut / “اتصال به تلگرام برقرار نشد”
+
+If you see `telegram.error.TimedOut` or `httpx.ConnectTimeout` at each step, the server cannot reach Telegram’s API in time (firewall, latency, or blocking).
+
+- The app uses **30s** connect/read/write timeouts and sends a short Persian message to the user on timeout.
+- If it still times out: set a **proxy** (e.g. where Telegram is blocked). The library uses `HTTPS_PROXY` or `HTTP_PROXY` from the environment. Example: `export HTTPS_PROXY=http://user:pass@host:port` before running the bot. For SOCKS5, install `python-telegram-bot[socks]` and use `HTTPS_PROXY=socks5://...`.
+
 ---
 
 ## Summary

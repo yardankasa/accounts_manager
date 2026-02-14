@@ -1,5 +1,4 @@
 """Entry point: init DB, bootstrap admins, run bot."""
-import asyncio
 import logging
 import sys
 
@@ -10,13 +9,17 @@ if __name__ == "__main__":
     if str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 
+from telegram import Update
+from telegram.error import TimedOut, NetworkError
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
+    ContextTypes,
     filters,
 )
+from telegram.request import HTTPXRequest
 
 from core.config import BOT_TOKEN, SESSION_DIR
 from core import db
@@ -32,6 +35,24 @@ from bot.handlers_nodes import (
 )
 
 logger = logging.getLogger(__name__)
+
+# User-facing message when Telegram API is unreachable (timeout/network)
+MSG_NETWORK_ERROR = "اتصال به تلگرام برقرار نشد. لطفاً چند لحظه بعد دوباره تلاش کنید."
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log errors and send a short Persian message on timeout/network errors."""
+    exc = context.error
+    logger.exception("Update %s caused error: %s", update, exc)
+    if isinstance(exc, (TimedOut, NetworkError)):
+        try:
+            if isinstance(update, Update) and update.effective_chat:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=MSG_NETWORK_ERROR,
+                )
+        except Exception:
+            pass
 
 
 def main() -> None:
@@ -50,13 +71,17 @@ def main() -> None:
         await db.close_pool()
         logger.info("DB pool closed")
 
+    # Longer timeouts for slow or restricted networks (e.g. servers that need proxy or high latency)
+    request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0, write_timeout=30.0)
     app = (
         Application.builder()
         .token(BOT_TOKEN)
+        .request(request)
         .post_init(post_init)
         .post_shutdown(post_shutdown)
         .build()
     )
+    app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("admin", cmd_admin))
     app.add_handler(MessageHandler(filters.Regex("^(بازگشت / انصراف|بازگشت|انصراف)$"), main_menu_back))
