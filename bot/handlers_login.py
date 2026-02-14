@@ -267,10 +267,13 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def login_conversation_handler():
-    # Entry: exact match on login button label (same string as in keyboards.LOGIN_BUTTON).
+    # Same Regex style as other menu handlers (nodes/accounts) so button text matches reliably.
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Text([LOGIN_BUTTON]), login_entry),
+            MessageHandler(
+                filters.Regex(r"^(📱 ورود به اکانت|ورود به اکانت)$"),
+                login_entry,
+            ),
         ],
         states={
             CHOOSE_NODE: [
