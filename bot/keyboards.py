@@ -6,11 +6,13 @@ inline_keyboard_clear = InlineKeyboardMarkup([])
 
 # Single label for "back to main menu" – easy to tap, same everywhere
 BACK_TO_MENU = "🏠 بازگشت به منو"
+# Login button text – use same string for handler matching
+LOGIN_BUTTON = "📱 ورود به اکانت"
 
 def main_admin_keyboard():
     return ReplyKeyboardMarkup(
         [
-            [KeyboardButton("📱 ورود به اکانت")],
+            [KeyboardButton(LOGIN_BUTTON)],
             [KeyboardButton("🖥 مدیریت نودها")],
             [KeyboardButton("📋 لیست اکانت‌ها")],
             [KeyboardButton(BACK_TO_MENU)],

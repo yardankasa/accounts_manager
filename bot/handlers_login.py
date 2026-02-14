@@ -253,9 +253,10 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def login_conversation_handler():
+    # Match message that contains "ورود به اکانت" (covers "📱 ورود به اکانت" and "ورود به اکانت")
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex("^(📱 ورود به اکانت|ورود به اکانت)$"), login_entry),
+            MessageHandler(filters.TEXT & filters.Regex("ورود به اکانت"), login_entry),
         ],
         states={
             CHOOSE_NODE: [
