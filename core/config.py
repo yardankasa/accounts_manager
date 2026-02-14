@@ -5,9 +5,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Project root: parent of src (src/core -> src -> project root)
-_SRC = Path(__file__).resolve().parent.parent
+_SRC = Path(__file__).resolve().parent
 _ROOT = _SRC.parent
-load_dotenv(_ROOT / ".env")
+load_dotenv(_ROOT / ".env", verbose=True)
 
 def get_env(key: str, default: str = "") -> str:
     return os.getenv(key, default).strip()
