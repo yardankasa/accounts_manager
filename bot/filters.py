@@ -1,4 +1,5 @@
 """Admin check: use in handlers to restrict access. Login button filter with Unicode normalization."""
+import logging
 import unicodedata
 
 from telegram import Update
@@ -8,15 +9,36 @@ import core.db as db
 from .keyboards import LOGIN_BUTTON
 from .messages import MSG_ACCESS_DENIED
 
+logger = logging.getLogger(__name__)
+
+# Zero-width chars Telegram may insert in Persian keyboard button text (ZWNJ, ZWSP, ZWJ, BOM)
+_ZERO_WIDTH = frozenset("\u200b\u200c\u200d\ufeff")
+
+
+def _normalize_for_match(s: str) -> str:
+    """NFC normalize and remove zero-width characters so button text matches when Telegram adds ZWNJ."""
+    s = (s or "").strip()
+    s = unicodedata.normalize("NFC", s)
+    s = "".join(c for c in s if c not in _ZERO_WIDTH)
+    return s
+
 
 class LoginButtonFilter(filters.MessageFilter):
-    """Match 'ورود به اکانت' with Unicode NFC normalization so Telegram NFD or extra chars still match."""
+    """Match 'ورود به اکانت' even if Telegram sends NFD or inserts ZWNJ in the text."""
 
     def filter(self, message):
         if not message or not message.text:
             return False
-        text = (message.text or "").strip()
-        return unicodedata.normalize("NFC", text) == unicodedata.normalize("NFC", LOGIN_BUTTON)
+        norm_msg = _normalize_for_match(message.text)
+        norm_btn = _normalize_for_match(LOGIN_BUTTON)
+        if norm_msg != norm_btn:
+            logger.debug(
+                "Login button mismatch: msg %r (len=%s) vs btn %r (len=%s)",
+                message.text, len(message.text),
+                LOGIN_BUTTON, len(LOGIN_BUTTON),
+            )
+            return False
+        return True
 
 
 # Single instance for use in handlers
