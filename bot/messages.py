@@ -1,4 +1,19 @@
 """Persian user-facing messages (with emojis)."""
+
+# Persian digits ۰-۹ for display (avoid mixing with English 0-9)
+FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
+
+
+def fa_num(n: int) -> str:
+    """Convert integer to string with Persian digits."""
+    return "".join(FA_DIGITS[int(d)] for d in str(n))
+
+
+def fa_digits(s: str) -> str:
+    """Replace English digits 0-9 in string with Persian digits."""
+    return "".join(FA_DIGITS[int(c)] if c in "0123456789" else c for c in s)
+
+
 MSG_ACCESS_DENIED = "⛔ شما دسترسی به این ربات را ندارید."
 MSG_ADMIN_PANEL = "👋 پنل ادمین.\nگزینه مورد نظر را انتخاب کنید:"
 MSG_CHOOSE_NODE = "🖥 نود را انتخاب کنید (عدد باقی‌مانده ورود امروز در پرانتز):"
@@ -26,3 +41,4 @@ MSG_CANCELLED = "🚫 انصراف."
 MSG_ERROR_GENERIC = "❌ خطایی رخ داد. لطفاً بعداً تلاش کنید."
 MSG_MAX_WRONG_CODE = "❌ تعداد تلاش بیش از حد. از منو دوباره شروع کنید."
 MSG_BACK_HINT = "برای بازگشت به منو دکمه زیر را بزنید 👇"
+MSG_MAIN_NODE_NO_DELETE = "🖥 نود اصلی قابل حذف نیست."

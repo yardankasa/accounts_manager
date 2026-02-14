@@ -14,7 +14,7 @@ import core.limits as limits
 from core.node_runner import check_node_connection
 
 from .filters import ensure_admin
-from .keyboards import node_manage_inline, node_delete_confirm_inline, main_admin_keyboard, back_keyboard, inline_keyboard_clear, BACK_TO_MENU
+from .keyboards import node_manage_inline, node_delete_confirm_inline, node_main_no_delete_inline, main_admin_keyboard, back_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .messages import (
     MSG_NODES_LIST,
     MSG_NODE_DELETED,
@@ -24,6 +24,8 @@ from .messages import (
     MSG_ERROR_GENERIC,
     MSG_ADMIN_PANEL,
     MSG_BACK_HINT,
+    MSG_MAIN_NODE_NO_DELETE,
+    fa_num,
 )
 from .logging_utils import log_exception
 
@@ -48,7 +50,8 @@ async def nodes_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             ok, _ = await check_node_connection(n)
             status = "آنلاین" if ok else "آفلاین"
         name = n["name"]
-        lines.append(f"• {name}: {status} – امروز {rem}/۳ ورود")
+        ip_display = "سرور اصلی" if n.get("is_main") else (n.get("ssh_host") or "—")
+        lines.append(f"• {name} │ {ip_display}: {status} – امروز {fa_num(rem)}/۳ ورود")
     text = MSG_NODES_LIST + "\n\n" + "\n".join(lines)
     kb = node_manage_inline(nodes)
     await update.message.reply_text(text, reply_markup=kb)
@@ -88,9 +91,15 @@ async def node_manage_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             status = "آنلاین" if ok else "آفلاین"
         accs = await db.list_accounts(node_id=node_id)
         acc_count = len(accs)
-        text = f"نود: {node['name']}\nوضعیت: {status}\nامروز: {rem}/۳ ورود\nتعداد اکانت: {acc_count}"
-        kb = node_delete_confirm_inline(node_id)
-        await q.edit_message_text(text + "\n\n" + MSG_DELETE_NODE_CONFIRM, reply_markup=kb)
+        ip_display = "سرور اصلی" if node.get("is_main") else (node.get("ssh_host") or "—")
+        text = f"نود: {node['name']}\nآی‌پی/میز: {ip_display}\nوضعیت: {status}\nامروز: {fa_num(rem)}/۳ ورود\nتعداد اکانت: {fa_num(acc_count)}"
+        if node.get("is_main"):
+            text += "\n\n" + MSG_MAIN_NODE_NO_DELETE
+            kb = node_main_no_delete_inline()
+        else:
+            text += "\n\n" + MSG_DELETE_NODE_CONFIRM
+            kb = node_delete_confirm_inline(node_id)
+        await q.edit_message_text(text, reply_markup=kb)
         return
 
 
@@ -108,6 +117,11 @@ async def node_delete_confirm_callback(update: Update, context: ContextTypes.DEF
         try:
             node_id = int(q.data.split("_")[2])
         except (IndexError, ValueError):
+            return
+        node = await db.get_node(node_id)
+        if node and node.get("is_main"):
+            await q.edit_message_text(MSG_MAIN_NODE_NO_DELETE, reply_markup=inline_keyboard_clear)
+            await context.bot.send_message(chat_id=chat_id, text=MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())
             return
         try:
             await db.delete_node(node_id)
