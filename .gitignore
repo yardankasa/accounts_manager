@@ -1,0 +1,62 @@
+# nesscray ignores
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pycache
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+wheels/
+
+# Python virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS/system files
+.DS_Store
+Thumbs.db
+
+# dotenv and secrets
+.env
+.env.*
+*.env
+
+# Logs
+*.log
+
+# Test cache
+.cache/
+.coverage
+htmlcov/
+
+# Misc
+*.bak
+*.swp
+*~
+
+# nesscray custom ignores (add any project-specific patterns below)
+
+
+.cursor/
+.vscode/
+.idea/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

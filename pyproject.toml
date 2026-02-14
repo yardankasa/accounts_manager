@@ -1,0 +1,16 @@
+[project]
+name = "rezabots"
+version = "0.1.0"
+description = "Admin Telegram bot for managing Telegram account logins across main server and nodes"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "python-telegram-bot>=21.0",
+  "telethon>=1.36",
+  "python-dotenv>=1.0",
+  "aiomysql>=0.2",
+  "asyncssh>=2.14",
+]
+
+[project.scripts]
+rezabots = "main:main"
