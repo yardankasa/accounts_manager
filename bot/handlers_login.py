@@ -1,7 +1,7 @@
 """Login flow: ConversationHandler for node -> phone -> code -> 2FA."""
 import asyncio
 import logging
-import unicodedata
+
 from telegram import Update
 from telegram.ext import (
     ContextTypes,
@@ -41,21 +41,6 @@ from .logging_utils import log_exception
 logger = logging.getLogger(__name__)
 
 
-def _normalize_text(s: str) -> str:
-    """NFC normalize and strip; avoids mismatch when Telegram sends different Unicode."""
-    return unicodedata.normalize("NFC", s).strip()
-
-
-class _LoginButtonFilter(filters.MessageFilter):
-    """Match login button text even if Unicode normalization or invisible chars differ."""
-
-    def filter(self, update_or_message):  # noqa: A003
-        msg = getattr(update_or_message, "message", update_or_message)
-        if not msg or not getattr(msg, "text", None):
-            return False
-        n = _normalize_text(msg.text)
-        expected = _normalize_text(LOGIN_BUTTON)
-        return n == expected or n == _normalize_text("ورود به اکانت")
 
 CHOOSE_NODE, ENTER_API_ID, ENTER_API_HASH, ENTER_PHONE, ENTER_CODE = range(5)
 MAX_WRONG_CODE_ATTEMPTS = 2
@@ -288,7 +273,7 @@ def login_conversation_handler():
     # Custom filter with Unicode normalization so "📱 ورود به اکانت" matches even if Telegram sends NFD or extra chars.
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.TEXT & _LoginButtonFilter(), login_entry),
+            MessageHandler(filters.TEXT & filters.Regex(LOGIN_BUTTON), login_entry),
         ],
         states={
             CHOOSE_NODE: [
