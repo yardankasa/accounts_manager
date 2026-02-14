@@ -17,7 +17,7 @@ import core.node_runner as node_runner
 from core.config import SESSION_DIR
 
 from .filters import ensure_admin
-from .keyboards import node_choice_inline, back_keyboard, main_admin_keyboard
+from .keyboards import node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear
 from .messages import (
     MSG_CHOOSE_NODE,
     MSG_NO_NODE_CAPACITY,
@@ -95,7 +95,8 @@ async def login_choose_node_callback(update: Update, context: ContextTypes.DEFAU
         return CHOOSE_NODE
     context.user_data["_node_id"] = node_id
     context.user_data["_node"] = node
-    await q.edit_message_text(MSG_ENTER_API_ID, reply_markup=back_keyboard())
+    await q.edit_message_text(MSG_ENTER_API_ID, reply_markup=inline_keyboard_clear)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="برای انصراف «بازگشت» بفرستید.", reply_markup=back_keyboard())
     return ENTER_API_ID
 
 

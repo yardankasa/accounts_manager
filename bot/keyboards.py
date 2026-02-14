@@ -1,6 +1,10 @@
 """Persian reply keyboards (normal buttons, no glass)."""
 from telegram import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 
+# Use when editing a message that had inline keyboard: pass this to clear buttons.
+# You cannot set a ReplyKeyboardMarkup when editing; send a new message for reply keyboard.
+inline_keyboard_clear = InlineKeyboardMarkup([])
+
 # Main admin panel
 def main_admin_keyboard():
     return ReplyKeyboardMarkup(

@@ -1,5 +1,6 @@
 """Async MySQL connection and table setup."""
 import logging
+import warnings
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Any
 
@@ -49,16 +50,18 @@ async def get_conn() -> AsyncIterator[aiomysql.Connection]:
 
 
 async def _ensure_tables() -> None:
-    async with get_conn() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=Warning)  # suppress "table exists", "integer width" etc.
+        async with get_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
                 CREATE TABLE IF NOT EXISTS admins (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     telegram_user_id BIGINT NOT NULL UNIQUE,
                     created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6)
                 )
             """)
-            await cur.execute("""
+                await cur.execute("""
                 CREATE TABLE IF NOT EXISTS nodes (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(255) NOT NULL,
@@ -72,7 +75,7 @@ async def _ensure_tables() -> None:
                     created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6)
                 )
             """)
-            await cur.execute("""
+                await cur.execute("""
                 CREATE TABLE IF NOT EXISTS accounts (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     node_id INT NOT NULL,
@@ -84,7 +87,7 @@ async def _ensure_tables() -> None:
                     FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
                 )
             """)
-            await cur.execute("""
+                await cur.execute("""
                 CREATE TABLE IF NOT EXISTS login_events (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     node_id INT NOT NULL,
@@ -128,7 +131,8 @@ async def ensure_admin(telegram_user_id: int) -> None:
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "INSERT IGNORE INTO admins (telegram_user_id) VALUES (%s)",
+                """INSERT INTO admins (telegram_user_id) VALUES (%s)
+                   ON DUPLICATE KEY UPDATE telegram_user_id = telegram_user_id""",
                 (telegram_user_id,),
             )
 

@@ -14,7 +14,7 @@ import core.limits as limits
 from core.node_runner import check_node_connection
 
 from .filters import ensure_admin
-from .keyboards import node_manage_inline, node_delete_confirm_inline, main_admin_keyboard, back_keyboard
+from .keyboards import node_manage_inline, node_delete_confirm_inline, main_admin_keyboard, back_keyboard, inline_keyboard_clear
 from .messages import (
     MSG_NODES_LIST,
     MSG_NODE_DELETED,
@@ -58,7 +58,8 @@ async def add_node_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     context.user_data["_add_node"] = {}
-    await q.edit_message_text("نام نود را وارد کنید:", reply_markup=back_keyboard())
+    await q.edit_message_text("نام نود را وارد کنید:", reply_markup=inline_keyboard_clear)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="برای انصراف «بازگشت» بفرستید.", reply_markup=back_keyboard())
     return ADD_NODE_NAME
 
 
@@ -96,8 +97,10 @@ async def node_delete_confirm_callback(update: Update, context: ContextTypes.DEF
         return
     q = update.callback_query
     await q.answer()
+    chat_id = update.effective_chat.id
     if q.data == "nodedel_no":
-        await q.edit_message_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
+        await q.edit_message_text(MSG_CANCELLED, reply_markup=inline_keyboard_clear)
+        await context.bot.send_message(chat_id=chat_id, text="منوی اصلی", reply_markup=main_admin_keyboard())
         return
     if q.data and q.data.startswith("nodedel_yes_"):
         try:
@@ -106,10 +109,12 @@ async def node_delete_confirm_callback(update: Update, context: ContextTypes.DEF
             return
         try:
             await db.delete_node(node_id)
-            await q.edit_message_text(MSG_NODE_DELETED, reply_markup=main_admin_keyboard())
+            await q.edit_message_text(MSG_NODE_DELETED, reply_markup=inline_keyboard_clear)
+            await context.bot.send_message(chat_id=chat_id, text="منوی اصلی", reply_markup=main_admin_keyboard())
         except Exception as e:
             log_exception(logger, "Delete node failed", e)
-            await q.edit_message_text(MSG_ERROR_GENERIC, reply_markup=main_admin_keyboard())
+            await q.edit_message_text(MSG_ERROR_GENERIC, reply_markup=inline_keyboard_clear)
+            await context.bot.send_message(chat_id=chat_id, text="منوی اصلی", reply_markup=main_admin_keyboard())
 
 
 # --- Add node conversation ---
