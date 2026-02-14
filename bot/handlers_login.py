@@ -267,11 +267,10 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def login_conversation_handler():
-    # PTB Regex uses re.match() (anchored at start). Message is "📱 ورود به اکانت" so allow leading chars.
+    # Entry: exact match on login button label (same string as in keyboards.LOGIN_BUTTON).
     return ConversationHandler(
         entry_points=[
-            # MessageHandler(filters.TEXT & filters.Regex(r".*ورود.*اکانت"), login_entry),
-            MessageHandler(filters.TEXT(LOGIN_BUTTON),login_entry)
+            MessageHandler(filters.Text([LOGIN_BUTTON]), login_entry),
         ],
         states={
             CHOOSE_NODE: [
