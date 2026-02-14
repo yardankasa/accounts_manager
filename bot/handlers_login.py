@@ -62,21 +62,34 @@ def _normalize_phone(text: str) -> str | None:
 
 # --- Entry: show node selection
 async def login_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return ConversationHandler.END
     if not await ensure_admin(update, context):
         return ConversationHandler.END
-    context.user_data["_chat_id"] = update.effective_chat.id
-    context.user_data["_bot"] = context.bot
-    nodes = await db.list_nodes()
-    nodes_with_remaining = []
-    for n in nodes:
-        rem = await limits.remaining_logins_today(n["id"])
-        nodes_with_remaining.append((n["id"], n["name"], rem))
-    if not any(r > 0 for _, _, r in nodes_with_remaining):
-        await update.message.reply_text(MSG_NO_NODE_CAPACITY, reply_markup=main_admin_keyboard())
+    try:
+        context.user_data["_chat_id"] = update.effective_chat.id
+        context.user_data["_bot"] = context.bot
+        nodes = await db.list_nodes()
+        nodes_with_remaining = []
+        for n in nodes:
+            rem = await limits.remaining_logins_today(n["id"])
+            nodes_with_remaining.append((n["id"], n["name"], rem))
+        if not any(r > 0 for _, _, r in nodes_with_remaining):
+            await update.message.reply_text(MSG_NO_NODE_CAPACITY, reply_markup=main_admin_keyboard())
+            return ConversationHandler.END
+        kb = node_choice_inline(nodes_with_remaining)
+        await update.message.reply_text(MSG_CHOOSE_NODE, reply_markup=kb)
+        return CHOOSE_NODE
+    except Exception as e:
+        log_exception(logger, "login_entry failed", e)
+        try:
+            await update.message.reply_text(
+                "❌ خطا در نمایش نودها. لطفاً دوباره تلاش کنید.",
+                reply_markup=main_admin_keyboard(),
+            )
+        except Exception:
+            pass
         return ConversationHandler.END
-    kb = node_choice_inline(nodes_with_remaining)
-    await update.message.reply_text(MSG_CHOOSE_NODE, reply_markup=kb)
-    return CHOOSE_NODE
 
 
 # --- Choose node (inline callback)
