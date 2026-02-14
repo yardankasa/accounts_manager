@@ -1,13 +1,13 @@
-"""Load .env from project root and expose config."""
+"""Load .env from application root and expose config."""
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Project root: parent of src (src/core -> src -> project root)
-_SRC = Path(__file__).resolve().parent
-_ROOT = _SRC.parent
-load_dotenv(_ROOT / ".env", verbose=True)
+# Application root: directory containing core/, main.py, .env (parent of core/)
+# All dirs (data, logs) are under this root.
+_APP_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(_APP_ROOT / ".env", verbose=True)
 
 def get_env(key: str, default: str = "") -> str:
     return os.getenv(key, default).strip()
@@ -31,7 +31,7 @@ MYSQL_USER = get_env("MYSQL_USER", "rezabots")
 MYSQL_PASSWORD = get_env("MYSQL_PASSWORD")
 MYSQL_DATABASE = get_env("MYSQL_DATABASE", "rezabots")
 
-# Paths
-DATA_DIR = _ROOT / "data"
+# Paths (all under application root)
+DATA_DIR = _APP_ROOT / "data"
 SESSION_DIR = DATA_DIR / "session"
-LOGS_DIR = _ROOT / "logs"
+LOGS_DIR = _APP_ROOT / "logs"

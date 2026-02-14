@@ -2,12 +2,12 @@
 import logging
 import sys
 
-# Ensure project root (parent of src) is on path for "core" and "bot"
+# Ensure application root (directory containing main.py) is on path for "core" and "bot"
 if __name__ == "__main__":
     from pathlib import Path
-    _src = Path(__file__).resolve().parent
-    if str(_src) not in sys.path:
-        sys.path.insert(0, str(_src))
+    _app_root = Path(__file__).resolve().parent
+    if str(_app_root) not in sys.path:
+        sys.path.insert(0, str(_app_root))
 
 from telegram import Update
 from telegram.error import TimedOut, NetworkError

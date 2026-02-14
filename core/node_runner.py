@@ -8,7 +8,7 @@ from typing import Awaitable, Callable
 import asyncssh
 
 from . import db
-from .config import _ROOT
+from .config import _APP_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ async def run_login_on_node(
     else:
         return False, "کلید یا رمز SSH برای نود تنظیم نشده.", None
 
-    worker_path = _ROOT / "src" / "scripts" / "login_worker.py"
+    worker_path = _APP_ROOT / "scripts" / "login_worker.py"
     
     if not worker_path.exists():
         return False, "اسکریپت ورود روی سرور یافت نشد.", None

@@ -17,7 +17,7 @@ import core.limits as limits
 import core.node_runner as node_runner
 from core.config import SESSION_DIR
 
-from .filters import ensure_admin
+from .filters import ensure_admin, login_button_filter
 from .keyboards import LOGIN_BUTTON, node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .messages import (
     MSG_CHOOSE_NODE,
@@ -270,10 +270,10 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def login_conversation_handler():
-    # Custom filter with Unicode normalization so "📱 ورود به اکانت" matches even if Telegram sends NFD or extra chars.
+    # Use login_button_filter so "📱 ورود به اکانت" matches even if Telegram sends NFD or different Unicode.
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.TEXT & filters.Regex(LOGIN_BUTTON), login_entry),
+            MessageHandler(filters.TEXT & login_button_filter, login_entry),
         ],
         states={
             CHOOSE_NODE: [
