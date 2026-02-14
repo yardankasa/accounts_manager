@@ -271,7 +271,7 @@ def login_conversation_handler():
     return ConversationHandler(
         entry_points=[
             MessageHandler(
-                filters.Regex(r"^(📱 ورود به اکانت|ورود به اکانت)$"),
+                filters.Regex(r"^( ورود به اکانت|ورود به اکانت)$"),
                 login_entry,
             ),
         ],
