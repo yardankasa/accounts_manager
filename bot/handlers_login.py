@@ -17,7 +17,7 @@ import core.node_runner as node_runner
 from core.config import SESSION_DIR
 
 from .filters import ensure_admin
-from .keyboards import node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear
+from .keyboards import node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .messages import (
     MSG_CHOOSE_NODE,
     MSG_NO_NODE_CAPACITY,
@@ -33,6 +33,7 @@ from .messages import (
     MSG_LOGIN_SUCCESS,
     MSG_LOGIN_CANCELLED,
     MSG_MAX_WRONG_CODE,
+    MSG_BACK_HINT,
 )
 from .logging_utils import log_exception
 
@@ -43,13 +44,19 @@ MAX_WRONG_CODE_ATTEMPTS = 2
 
 
 def _normalize_phone(text: str) -> str | None:
+    """Normalize to digits only. Iranian 09xxxxxxxxx -> 98..., rest as international (e.g. 254...)."""
     s = "".join(c for c in text if c.isdigit())
     if not s or len(s) < 10:
         return None
+    # Iranian: 09xxxxxxxx or 9xxxxxxxx (10 digits) -> 98xxxxxxxxx
+    if len(s) == 10 and s.startswith("0") and s[1] == "9":
+        return "98" + s[1:]
+    if len(s) == 10 and s.startswith("9"):
+        return "98" + s
+    # Already has country code (e.g. 98..., 254..., 1...) or 11+ digits
     if s.startswith("98") and len(s) >= 11:
         return s
-    if not s.startswith("98") and len(s) >= 10:
-        return "98" + s.lstrip("0") if s.startswith("0") else "98" + s
+    # Other international: keep as-is (e.g. 254796276463)
     return s
 
 
@@ -96,7 +103,7 @@ async def login_choose_node_callback(update: Update, context: ContextTypes.DEFAU
     context.user_data["_node_id"] = node_id
     context.user_data["_node"] = node
     await q.edit_message_text(MSG_ENTER_API_ID, reply_markup=inline_keyboard_clear)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="برای انصراف «بازگشت» بفرستید.", reply_markup=back_keyboard())
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=MSG_BACK_HINT, reply_markup=back_keyboard())
     return ENTER_API_ID
 
 
@@ -105,7 +112,7 @@ async def login_enter_api_id(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         await update.message.reply_text(MSG_LOGIN_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
     try:
@@ -123,7 +130,7 @@ async def login_enter_api_hash(update: Update, context: ContextTypes.DEFAULT_TYP
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         await update.message.reply_text(MSG_LOGIN_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
     if not text or len(text) < 10:
@@ -211,7 +218,7 @@ async def login_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_login_task", None)
         context.user_data.pop("_code_future", None)
         context.user_data.pop("_password_future", None)
@@ -248,7 +255,7 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def login_conversation_handler():
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex("^ورود به اکانت$"), login_entry),
+            MessageHandler(filters.Regex("^(📱 ورود به اکانت|ورود به اکانت)$"), login_entry),
         ],
         states={
             CHOOSE_NODE: [
@@ -268,10 +275,10 @@ def login_conversation_handler():
             ],
         },
         fallbacks=[
-            MessageHandler(filters.Regex("^(بازگشت|انصراف|بازگشت / انصراف)$"), login_cancel),
+            MessageHandler(filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت|انصراف|بازگشت / انصراف)$"), login_cancel),
             CommandHandler("cancel", login_cancel),
         ],
-        per_message=False,
+        per_message=True,
         per_chat=True,
         per_user=True,
     )

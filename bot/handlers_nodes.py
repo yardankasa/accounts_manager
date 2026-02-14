@@ -14,7 +14,7 @@ import core.limits as limits
 from core.node_runner import check_node_connection
 
 from .filters import ensure_admin
-from .keyboards import node_manage_inline, node_delete_confirm_inline, main_admin_keyboard, back_keyboard, inline_keyboard_clear
+from .keyboards import node_manage_inline, node_delete_confirm_inline, main_admin_keyboard, back_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .messages import (
     MSG_NODES_LIST,
     MSG_NODE_DELETED,
@@ -22,6 +22,8 @@ from .messages import (
     MSG_DELETE_NODE_CONFIRM,
     MSG_CANCELLED,
     MSG_ERROR_GENERIC,
+    MSG_ADMIN_PANEL,
+    MSG_BACK_HINT,
 )
 from .logging_utils import log_exception
 
@@ -59,7 +61,7 @@ async def add_node_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     context.user_data["_add_node"] = {}
     await q.edit_message_text("نام نود را وارد کنید:", reply_markup=inline_keyboard_clear)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="برای انصراف «بازگشت» بفرستید.", reply_markup=back_keyboard())
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=MSG_BACK_HINT, reply_markup=back_keyboard())
     return ADD_NODE_NAME
 
 
@@ -100,7 +102,7 @@ async def node_delete_confirm_callback(update: Update, context: ContextTypes.DEF
     chat_id = update.effective_chat.id
     if q.data == "nodedel_no":
         await q.edit_message_text(MSG_CANCELLED, reply_markup=inline_keyboard_clear)
-        await context.bot.send_message(chat_id=chat_id, text="منوی اصلی", reply_markup=main_admin_keyboard())
+        await context.bot.send_message(chat_id=chat_id, text=MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())
         return
     if q.data and q.data.startswith("nodedel_yes_"):
         try:
@@ -110,11 +112,11 @@ async def node_delete_confirm_callback(update: Update, context: ContextTypes.DEF
         try:
             await db.delete_node(node_id)
             await q.edit_message_text(MSG_NODE_DELETED, reply_markup=inline_keyboard_clear)
-            await context.bot.send_message(chat_id=chat_id, text="منوی اصلی", reply_markup=main_admin_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())
         except Exception as e:
             log_exception(logger, "Delete node failed", e)
             await q.edit_message_text(MSG_ERROR_GENERIC, reply_markup=inline_keyboard_clear)
-            await context.bot.send_message(chat_id=chat_id, text="منوی اصلی", reply_markup=main_admin_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())
 
 
 # --- Add node conversation ---
@@ -128,7 +130,7 @@ async def add_node_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
         await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
@@ -141,7 +143,7 @@ async def add_node_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
         await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
@@ -154,7 +156,7 @@ async def add_node_port(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
         await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
@@ -171,7 +173,7 @@ async def add_node_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
         await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
@@ -184,7 +186,7 @@ async def add_node_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
         await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
@@ -202,7 +204,7 @@ async def add_node_session_path(update: Update, context: ContextTypes.DEFAULT_TY
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
-    if "انصراف" in text or "بازگشت" in text:
+    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
         await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
@@ -253,8 +255,9 @@ def node_add_conversation_handler():
             ADD_NODE_SESSION_PATH: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_node_session_path)],
         },
         fallbacks=[
-            MessageHandler(filters.Regex("^(بازگشت|انصراف)$"), add_node_cancel),
+            MessageHandler(filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت|انصراف)$"), add_node_cancel),
         ],
+        per_message=True,
         per_chat=True,
         per_user=True,
     )

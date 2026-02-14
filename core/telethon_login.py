@@ -9,6 +9,7 @@ from telethon.errors import (
     PhoneCodeInvalidError,
     PhoneCodeExpiredError,
     PasswordHashInvalidError,
+    PhoneNumberInvalidError,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,10 @@ async def run_login_main(
     try:
         await client.connect()
         if not await client.is_user_authorized():
-            await client.send_code_request(phone)
+            try:
+                await client.send_code_request(phone)
+            except PhoneNumberInvalidError:
+                return False, "شماره تلفن معتبر نیست. با کد کشور و بدون فاصله وارد کنید (مثال: 254796276463 یا +254796276463).", None
             code = await code_callback()
             try:
                 await client.sign_in(phone, code)

@@ -4,8 +4,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from .filters import ensure_admin
-from .keyboards import main_admin_keyboard, cancel_keyboard
-from .messages import MSG_ACCESS_DENIED, MSG_ADMIN_PANEL, MSG_CANCELLED
+from .keyboards import main_admin_keyboard
+from .messages import MSG_ACCESS_DENIED, MSG_ADMIN_PANEL
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def main_menu_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """بازگشت / انصراف: remove keyboard and show short message."""
+    """🏠 بازگشت به منو: show main panel again (one-tap back)."""
     if not await ensure_admin(update, context):
         return
-    await update.message.reply_text(MSG_CANCELLED, reply_markup=cancel_keyboard())
+    await update.message.reply_text(MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())

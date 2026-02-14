@@ -84,9 +84,12 @@ def main() -> None:
     app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("admin", cmd_admin))
-    app.add_handler(MessageHandler(filters.Regex("^(بازگشت / انصراف|بازگشت|انصراف)$"), main_menu_back))
-    app.add_handler(MessageHandler(filters.Regex("^مدیریت نودها$"), nodes_list))
-    app.add_handler(MessageHandler(filters.Regex("^لیست اکانت‌ها$"), accounts_list))
+    app.add_handler(MessageHandler(
+        filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت / انصراف|بازگشت|انصراف)$"),
+        main_menu_back,
+    ))
+    app.add_handler(MessageHandler(filters.Regex("^(🖥 مدیریت نودها|مدیریت نودها)$"), nodes_list))
+    app.add_handler(MessageHandler(filters.Regex("^(📋 لیست اکانت‌ها|لیست اکانت‌ها)$"), accounts_list))
     app.add_handler(login_conversation_handler())
     app.add_handler(node_add_conversation_handler())
     app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_[0-9]+$"))
