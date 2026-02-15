@@ -6,6 +6,7 @@ Outputs: OK or ERROR <message>
 """
 import os
 import sys
+import time
 
 
 def main() -> None:
@@ -34,6 +35,7 @@ def main() -> None:
             bot = client.get_entity(bot_username)
             client.send_message(bot, msg1)
             if msg2:
+                time.sleep(2)
                 client.send_message(bot, msg2)
             print("OK", flush=True)
     except Exception as e:

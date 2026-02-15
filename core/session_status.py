@@ -1,4 +1,5 @@
 """Check if a Telethon session is active (authorized and reachable)."""
+import asyncio
 import logging
 
 from telethon import TelegramClient
@@ -51,7 +52,9 @@ async def send_messages_to_bot(
             await client.disconnect()
             return False, "Session not authorized"
         bot = await client.get_entity(bot_username)
-        for msg in messages:
+        for i, msg in enumerate(messages):
+            if i > 0:
+                await asyncio.sleep(2)
             await client.send_message(bot, msg)
         await client.disconnect()
         return True, ""
