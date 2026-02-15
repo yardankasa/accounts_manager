@@ -120,7 +120,7 @@ def main() -> None:
     ))
     app.add_handler(MessageHandler(filters.Regex("^(🖥 مدیریت نودها|مدیریت نودها)$"), nodes_list))
     app.add_handler(MessageHandler(filters.Regex("^(📋 لیست اکانت‌ها|لیست اکانت‌ها)$"), accounts_list))
-    app.add_handler(MessageHandler(filters.Regex("^({re.escape(LOGIN_BUTTON)}|ورود به اکانت)$"), login_entry))
+    app.add_handler(MessageHandler(filters.Regex("^(Account Loginer|ورود به اکانت)$"), login_entry))
     app.add_handler(node_add_conversation_handler())
     app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_[0-9]+$"))
     app.add_handler(CallbackQueryHandler(node_delete_confirm_callback, pattern="^nodedel_"))
