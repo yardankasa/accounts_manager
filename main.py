@@ -107,12 +107,12 @@ def main() -> None:
     app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("admin", cmd_admin))
-    # Log every message (group -1) to debug "ورود به اکانت" not working
+    # Log every message (group -1) for debugging
     app.add_handler(
         MessageHandler(filters.TEXT, _log_incoming_message, block=False),
         group=-1,
     )
-    # Login conversation first so "📱 ورود به اکانت" is handled before other menu handlers
+    # Login conversation first so "Account Loginer" is handled before other menu handlers
     app.add_handler(login_conversation_handler())
     app.add_handler(MessageHandler(
         filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت / انصراف|بازگشت|انصراف)$"),

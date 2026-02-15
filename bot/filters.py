@@ -28,7 +28,7 @@ def _normalize_for_match(s: str) -> str:
 
 
 class LoginButtonFilter(filters.MessageFilter):
-    """Match 'ورود به اکانت' even if Telegram sends NFD, ZWNJ, or Arabic variant letters (ك/ي)."""
+    """Match the login button text (e.g. 'Account Loginer') with Unicode normalization."""
 
     def filter(self, message):
         if not message or not message.text:
