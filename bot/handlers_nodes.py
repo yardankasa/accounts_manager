@@ -33,7 +33,7 @@ from .logging_utils import log_exception
 logger = logging.getLogger(__name__)
 
 # Add node conversation states
-ADD_NODE_NAME, ADD_NODE_HOST, ADD_NODE_PORT, ADD_NODE_USER, ADD_NODE_AUTH, ADD_NODE_SESSION_PATH = range(6)
+ADD_NODE_NAME, ADD_NODE_HOST, ADD_NODE_PORT, ADD_NODE_USER, ADD_NODE_AUTH = range(5)
 
 
 async def nodes_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -208,7 +208,7 @@ async def add_node_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
     context.user_data["_add_node"]["user"] = text
-    await update.message.reply_text("مسیر کلید SSH (فایل) یا رمز SSH را وارد کنید. برای کلید مسیر کامل بدهید:")
+    await update.message.reply_text("رمز عبور SSH را وارد کنید:")
     return ADD_NODE_AUTH
 
 
@@ -220,34 +220,16 @@ async def add_node_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("_add_node", None)
         await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
-    if text.startswith("/") or "." in text:
-        context.user_data["_add_node"]["key_path"] = text
-        context.user_data["_add_node"]["password"] = None
-    else:
-        context.user_data["_add_node"]["password"] = text
-        context.user_data["_add_node"]["key_path"] = None
-    await update.message.reply_text("مسیر پوشهٔ session روی سرور نود (مثال: /opt/rezabots/data/session):")
-    return ADD_NODE_SESSION_PATH
-
-
-async def add_node_session_path(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await ensure_admin(update, context):
-        return ConversationHandler.END
-    text = (update.message.text or "").strip()
-    if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
-        context.user_data.pop("_add_node", None)
-        await update.message.reply_text(MSG_CANCELLED, reply_markup=main_admin_keyboard())
-        return ConversationHandler.END
+    context.user_data["_add_node"]["password"] = text
     data = context.user_data.pop("_add_node", {})
     name = data.get("name", "نود")
     host = data.get("host")
     port = int(data.get("port", 22))
     user = data.get("user")
-    key_path = data.get("key_path")
     password = data.get("password")
-    session_base_path = text or "/opt/rezabots/data/session"
-    if not host or not user:
-        await update.message.reply_text("اطلاعات ناقص. لغو شد.", reply_markup=main_admin_keyboard())
+    session_base_path = f"/home/{user}/rezabots/sessions"
+    if not host or not user or not password:
+        await update.message.reply_text("اطلاعات ناقص (میز، کاربر و رمز عبور الزامی است). لغو شد.", reply_markup=main_admin_keyboard())
         return ConversationHandler.END
     try:
         node_id = await db.create_node(
@@ -257,7 +239,7 @@ async def add_node_session_path(update: Update, context: ContextTypes.DEFAULT_TY
             ssh_host=host,
             ssh_port=port,
             ssh_user=user,
-            ssh_key_path=key_path,
+            ssh_key_path=None,
             ssh_password=password,
         )
         # Verify connection
@@ -282,7 +264,6 @@ def node_add_conversation_handler():
             ADD_NODE_PORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_node_port)],
             ADD_NODE_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_node_user)],
             ADD_NODE_AUTH: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_node_auth)],
-            ADD_NODE_SESSION_PATH: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_node_session_path)],
         },
         fallbacks=[
             MessageHandler(filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت|انصراف)$"), add_node_cancel),

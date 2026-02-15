@@ -35,20 +35,17 @@ async def check_node_connection(node: dict) -> tuple[bool, str]:
     port = int(node.get("ssh_port") or 22)
     if not host or not user:
         return False, "نود پیکربندی نشده (میز یا کاربر SSH مشخص نیست)."
+    if not node.get("ssh_password"):
+        return False, "برای نود رمز عبور SSH تنظیم نشده."
     try:
-        kwargs = {
-            "host": host,
-            "port": port,
-            "username": user,
-        }
-        if node.get("ssh_key_path"):
-            kwargs["client_keys"] = [node["ssh_key_path"]]
-        elif node.get("ssh_password"):
-            kwargs["password"] = node["ssh_password"]
-        else:
-            return False, "برای نود کلید یا رمز SSH تنظیم نشده."
         conn = await asyncio.wait_for(
-            asyncssh.connect(**kwargs),
+            asyncssh.connect(
+                host=host,
+                port=port,
+                username=user,
+                password=node["ssh_password"],
+                known_hosts=None,
+            ),
             timeout=15,
         )
         # Quick test: run true
@@ -99,13 +96,9 @@ async def run_login_on_node(
     host = node["ssh_host"]
     user = node["ssh_user"]
     port = int(node.get("ssh_port") or 22)
-    kwargs = {"host": host, "port": port, "username": user}
-    if node.get("ssh_key_path"):
-        kwargs["client_keys"] = [node["ssh_key_path"]]
-    elif node.get("ssh_password"):
-        kwargs["password"] = node["ssh_password"]
-    else:
-        return False, "کلید یا رمز SSH برای نود تنظیم نشده.", None
+    password = node.get("ssh_password")
+    if not password:
+        return False, "رمز عبور SSH برای نود تنظیم نشده.", None
 
     worker_path = _APP_ROOT / "scripts" / "login_worker.py"
     
@@ -116,7 +109,16 @@ async def run_login_on_node(
     remote_script_path = f"/tmp/rezabots_login_worker_{node_id}.py"
 
     try:
-        conn = await asyncio.wait_for(asyncssh.connect(**kwargs), timeout=15)
+        conn = await asyncio.wait_for(
+            asyncssh.connect(
+                host=host,
+                port=port,
+                username=user,
+                password=password,
+                known_hosts=None,
+            ),
+            timeout=15,
+        )
         try:
             async with conn.start_sftp_client() as sftp:
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -159,15 +161,20 @@ async def delete_session_on_node(node: dict, session_path: str) -> None:
     host = node.get("ssh_host")
     user = node.get("ssh_user")
     port = int(node.get("ssh_port") or 22)
-    kwargs = {"host": host, "port": port, "username": user}
-    if node.get("ssh_key_path"):
-        kwargs["client_keys"] = [node["ssh_key_path"]]
-    elif node.get("ssh_password"):
-        kwargs["password"] = node["ssh_password"]
-    else:
+    password = node.get("ssh_password")
+    if not password:
         return
     try:
-        conn = await asyncio.wait_for(asyncssh.connect(**kwargs), timeout=15)
+        conn = await asyncio.wait_for(
+            asyncssh.connect(
+                host=host,
+                port=port,
+                username=user,
+                password=password,
+                known_hosts=None,
+            ),
+            timeout=15,
+        )
         try:
             # Session path is typically /base/phone; Telethon creates /base/phone.session
             await conn.run(f'rm -f "{session_path}"*')
@@ -200,12 +207,8 @@ async def send_messages_to_bot_on_node(
     host = node.get("ssh_host")
     user = node.get("ssh_user")
     port = int(node.get("ssh_port") or 22)
-    kwargs = {"host": host, "port": port, "username": user}
-    if node.get("ssh_key_path"):
-        kwargs["client_keys"] = [node["ssh_key_path"]]
-    elif node.get("ssh_password"):
-        kwargs["password"] = node["ssh_password"]
-    else:
+    password = node.get("ssh_password")
+    if not password:
         return False, "SSH not configured"
     worker_path = _APP_ROOT / "scripts" / "send_msg_worker.py"
     if not worker_path.exists():
@@ -221,7 +224,16 @@ async def send_messages_to_bot_on_node(
         "MSG2": messages[1] if len(messages) > 1 else "",
     }
     try:
-        conn = await asyncio.wait_for(asyncssh.connect(**kwargs), timeout=15)
+        conn = await asyncio.wait_for(
+            asyncssh.connect(
+                host=host,
+                port=port,
+                username=user,
+                password=password,
+                known_hosts=None,
+            ),
+            timeout=15,
+        )
         try:
             async with conn.start_sftp_client() as sftp:
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
@@ -263,12 +275,8 @@ async def check_session_on_node(
     host = node.get("ssh_host")
     user = node.get("ssh_user")
     port = int(node.get("ssh_port") or 22)
-    kwargs = {"host": host, "port": port, "username": user}
-    if node.get("ssh_key_path"):
-        kwargs["client_keys"] = [node["ssh_key_path"]]
-    elif node.get("ssh_password"):
-        kwargs["password"] = node["ssh_password"]
-    else:
+    password = node.get("ssh_password")
+    if not password:
         return False, "SSH not configured"
     worker_path = _APP_ROOT / "scripts" / "status_check_worker.py"
     if not worker_path.exists():
@@ -276,7 +284,16 @@ async def check_session_on_node(
     script_content = worker_path.read_text()
     remote_path = f"/tmp/rezabots_status_worker_{node.get('id', 0)}.py"
     try:
-        conn = await asyncio.wait_for(asyncssh.connect(**kwargs), timeout=15)
+        conn = await asyncio.wait_for(
+            asyncssh.connect(
+                host=host,
+                port=port,
+                username=user,
+                password=password,
+                known_hosts=None,
+            ),
+            timeout=15,
+        )
         try:
             async with conn.start_sftp_client() as sftp:
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
