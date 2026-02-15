@@ -26,6 +26,8 @@ PROXY_URL = get_env("PROXY_URL")
 API_ID = get_int("API_ID")
 API_HASH = get_env("API_HASH")
 ADMIN_IDS_STR = get_env("ADMIN_IDS")  # comma-separated for bootstrap
+# Bot username (without @) - accounts send /im_alive_ to this bot. Example: StarsRM_bot
+BOT_USERNAME = get_env("BOT_USERNAME")
 # MySQL
 MYSQL_HOST = get_env("MYSQL_HOST", "127.0.0.1")
 MYSQL_PORT = get_int("MYSQL_PORT", 3306)

@@ -177,6 +177,74 @@ async def delete_session_on_node(node: dict, session_path: str) -> None:
         logger.warning("Delete session on remote node failed: %s", e)
 
 
+async def send_messages_to_bot_on_node(
+    node: dict,
+    session_path: str,
+    api_id: int,
+    api_hash: str,
+    bot_username: str,
+    messages: list[str],
+) -> tuple[bool, str]:
+    """
+    Use the account's session to send messages to a bot. Returns (success, error_message).
+    Main node: runs locally. Remote: runs send_msg_worker via SSH.
+    """
+    if not messages:
+        return False, "No messages"
+    if node.get("is_main"):
+        from . import session_status
+        return await session_status.send_messages_to_bot(
+            session_path, api_id, api_hash, bot_username, messages
+        )
+    # Remote: SSH and run send_msg_worker
+    host = node.get("ssh_host")
+    user = node.get("ssh_user")
+    port = int(node.get("ssh_port") or 22)
+    kwargs = {"host": host, "port": port, "username": user}
+    if node.get("ssh_key_path"):
+        kwargs["client_keys"] = [node["ssh_key_path"]]
+    elif node.get("ssh_password"):
+        kwargs["password"] = node["ssh_password"]
+    else:
+        return False, "SSH not configured"
+    worker_path = _APP_ROOT / "scripts" / "send_msg_worker.py"
+    if not worker_path.exists():
+        return False, "Send msg worker not found"
+    script_content = worker_path.read_text()
+    remote_path = f"/tmp/rezabots_send_msg_{node.get('id', 0)}.py"
+    env = {
+        "API_ID": str(api_id),
+        "API_HASH": api_hash,
+        "SESSION_PATH": session_path,
+        "BOT_USERNAME": bot_username.lstrip("@"),
+        "MSG1": messages[0] if messages else "/start",
+        "MSG2": messages[1] if len(messages) > 1 else "",
+    }
+    try:
+        conn = await asyncio.wait_for(asyncssh.connect(**kwargs), timeout=15)
+        try:
+            async with conn.start_sftp_client() as sftp:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+                    f.write(script_content)
+                    local_path = f.name
+                try:
+                    await sftp.put(local_path, remote_path)
+                finally:
+                    Path(local_path).unlink(missing_ok=True)
+            result = await conn.run(f"python3 -u {remote_path}", env=env)
+            out = (result.stdout or "").strip()
+            if out == "OK":
+                return True, ""
+            return False, out.replace("ERROR ", "", 1) if out.startswith("ERROR ") else out or "Unknown"
+        finally:
+            conn.close()
+    except asyncio.TimeoutError:
+        return False, "Connection timeout"
+    except Exception as e:
+        logger.exception("Send to bot on node failed: %s", e)
+        return False, str(e)[:80]
+
+
 async def check_session_on_node(
     node: dict,
     session_path: str,

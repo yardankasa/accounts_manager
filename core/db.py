@@ -141,6 +141,14 @@ async def is_admin(telegram_user_id: int) -> bool:
             return result
 
 
+async def list_admin_ids() -> list[int]:
+    """Return list of admin telegram_user_ids."""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT telegram_user_id FROM admins")
+            return [row[0] for row in await cur.fetchall()]
+
+
 async def ensure_admin(telegram_user_id: int) -> None:
     async with get_conn() as conn:
         async with conn.cursor() as cur:

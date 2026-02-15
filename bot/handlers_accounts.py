@@ -1,16 +1,24 @@
-"""Account list, delete, and status check."""
+"""Account list, delete, status check, and im_alive request."""
 import logging
 from datetime import datetime, timezone, timedelta
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, MessageHandler, CallbackQueryHandler, filters
 
 import core.db as db
-from core.node_runner import check_node_connection, check_session_on_node
+from core.config import BOT_USERNAME
+from core.node_runner import (
+    check_node_connection,
+    check_session_on_node,
+    send_messages_to_bot_on_node,
+)
 
 from .filters import ensure_admin
 from .keyboards import account_list_inline, main_admin_keyboard
 from .messages import MSG_ACCOUNTS_LIST, MSG_NO_ACCOUNTS, MSG_ACCOUNT_DELETED, MSG_ERROR_GENERIC
 from .logging_utils import log_exception
+
+# Button text for "request send message to bot"
+MSG_IM_ALIVE_BTN = "👓 درخواست ارسال پیام به ربات"
 
 logger = logging.getLogger(__name__)
 
@@ -146,4 +154,82 @@ async def account_status_callback(update: Update, context: ContextTypes.DEFAULT_
         created_at=created_at,
         error=error,
     )
-    await q.edit_message_text(report)
+    # Add "درخواست ارسال پیام به ربات" button only when session is active
+    reply_markup = None
+    if is_active and BOT_USERNAME:
+        reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton(MSG_IM_ALIVE_BTN, callback_data=f"im_alive_req_{account_id}")],
+        ])
+    await q.edit_message_text(report, reply_markup=reply_markup)
+
+
+async def im_alive_request_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Account sends /start and /im_alive_$phone to the bot."""
+    if not await ensure_admin(update, context):
+        return
+    q = update.callback_query
+    await q.answer("در حال ارسال پیام...")
+    if not q.data or not q.data.startswith("im_alive_req_"):
+        return
+    try:
+        account_id = int(q.data.split("_")[3])
+    except (IndexError, ValueError):
+        await q.edit_message_text(MSG_ERROR_GENERIC)
+        return
+    acc = await db.get_account(account_id)
+    if not acc:
+        await q.edit_message_text("اکانت یافت نشد.")
+        return
+    api_id = acc.get("api_id")
+    api_hash = acc.get("api_hash")
+    if not api_id or not api_hash:
+        await q.edit_message_text("API_ID و API_HASH ذخیره نشده.")
+        return
+    if not BOT_USERNAME:
+        await q.edit_message_text("❌ BOT_USERNAME در .env تنظیم نشده.")
+        return
+    node = await db.get_node(acc["node_id"])
+    if not node:
+        await q.edit_message_text("نود یافت نشد.")
+        return
+    phone = "".join(c for c in acc["phone"] if c.isdigit())
+    messages = ["/start", f"/im_alive_{phone}"]
+    ok, err = await send_messages_to_bot_on_node(
+        node, acc["session_path"], api_id, api_hash,
+        BOT_USERNAME, messages,
+    )
+    if ok:
+        await q.edit_message_text(
+            "✅ پیام ارسال شد. اکانت /start و /im_alive را به ربات فرستاد.\n"
+            "منتظر پاسخ ربات باشید."
+        )
+    else:
+        await q.edit_message_text(f"❌ خطا در ارسال: {err}")
+
+
+async def im_alive_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """When account sends /im_alive_$phone to bot, notify admins."""
+    if not update.message or not update.message.text:
+        return
+    text = update.message.text.strip()
+    if not text.startswith("/im_alive_"):
+        return
+    try:
+        phone = text.replace("/im_alive_", "", 1).strip()
+        if not phone:
+            return
+    except Exception:
+        return
+    # Notify all admins
+    admin_ids = await db.list_admin_ids()
+    masked = _mask_phone(phone)
+    msg = (
+        f"✅ ربات در حال انجام کار است.\n"
+        f"📱 اکانت {masked} پیام im_alive ارسال کرد.\n"
+        f"📡 نشست فعال و آمادهٔ سرویس است."
+    )
+    for aid in admin_ids:
+        try:
+            await context.bot.send_message(chat_id=aid, text=msg)
+        except Exception as e:
+            logger.warning("Notify admin %s failed: %s", aid, e)
