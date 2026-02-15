@@ -73,6 +73,7 @@ def node_manage_inline(nodes: list[dict]):
         label = f"🖥 {name} │ {ip_label}" if len(ip_label) < 25 else f"🖥 {name}"
         buttons.append([InlineKeyboardButton(label, callback_data=f"nodemgr_{n['id']}")])
     buttons.append([InlineKeyboardButton("➕ افزودن نود جدید", callback_data="nodemgr_add")])
+    buttons.append([InlineKeyboardButton("🔍 بررسی سلامت نودها", callback_data="nodemgr_healthcheck")])
     return InlineKeyboardMarkup(buttons) if buttons else None
 
 

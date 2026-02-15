@@ -73,9 +73,38 @@ async def node_manage_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     if not await ensure_admin(update, context):
         return
     q = update.callback_query
-    await q.answer()
     if not q.data or q.data == "nodemgr_add":
+        if q.data:
+            await q.answer()
         return
+    # Health check: run check on all nodes and report
+    if q.data == "nodemgr_healthcheck":
+        await q.answer("در حال بررسی...")
+        nodes = await db.list_nodes()
+        lines = ["🔍 گزارش سلامت نودها:\n"]
+        for n in nodes:
+            name = n.get("name", f"نود {n['id']}")
+            if n.get("is_main"):
+                from core.config import SESSION_DIR
+                try:
+                    SESSION_DIR.mkdir(parents=True, exist_ok=True)
+                    lines.append(f"✅ {name} (سرور اصلی): آنلاین")
+                except Exception:
+                    lines.append(f"❌ {name} (سرور اصلی): خطا")
+            else:
+                ok, msg = await check_node_connection(n)
+                status = "آنلاین" if ok else f"آفلاین ({msg[:40]})"
+                icon = "✅" if ok else "❌"
+                lines.append(f"{icon} {name}: {status}")
+        text = "\n".join(lines)
+        await q.edit_message_text(text, reply_markup=inline_keyboard_clear)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=MSG_ADMIN_PANEL,
+            reply_markup=main_admin_keyboard(),
+        )
+        return
+    await q.answer()
     if q.data.startswith("nodemgr_"):
         try:
             node_id = int(q.data.split("_")[1])
@@ -227,7 +256,7 @@ async def add_node_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     port = int(data.get("port", 22))
     user = data.get("user")
     password = data.get("password")
-    session_base_path = f"/home/{user}/rezabots/sessions"
+    session_base_path = "/opt/rezabots/sessions"
     if not host or not user or not password:
         await update.message.reply_text("اطلاعات ناقص (میز، کاربر و رمز عبور الزامی است). لغو شد.", reply_markup=main_admin_keyboard())
         return ConversationHandler.END

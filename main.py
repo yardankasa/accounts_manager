@@ -127,7 +127,7 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.Regex("^(🖥 مدیریت نودها|مدیریت نودها)$"), nodes_list))
     app.add_handler(MessageHandler(filters.Regex("^(📋 لیست اکانت‌ها|لیست اکانت‌ها)$"), accounts_list))
     app.add_handler(node_add_conversation_handler())
-    app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_[0-9]+$"))
+    app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_"))
     app.add_handler(CallbackQueryHandler(node_delete_confirm_callback, pattern="^nodedel_"))
     app.add_handler(CallbackQueryHandler(account_status_callback, pattern="^statusacc_"))
     app.add_handler(CallbackQueryHandler(im_alive_request_callback, pattern="^im_alive_req_"))

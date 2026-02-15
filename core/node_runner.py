@@ -48,8 +48,8 @@ async def check_node_connection(node: dict) -> tuple[bool, str]:
             ),
             timeout=15,
         )
-        # Quick test: run true
-        result = await conn.run("echo OK")
+        # Quick test + ensure session dir exists
+        result = await conn.run("echo OK && mkdir -p /opt/rezabots/sessions")
         conn.close()
         if result.exit_status == 0 and "OK" in (result.stdout or ""):
             return True, "اتصال به نود برقرار است."
