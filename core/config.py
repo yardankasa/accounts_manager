@@ -28,6 +28,8 @@ API_HASH = get_env("API_HASH")
 ADMIN_IDS_STR = get_env("ADMIN_IDS")  # comma-separated for bootstrap
 # Bot username (without @) - accounts send /im_alive_ to this bot. Example: StarsRM_bot
 BOT_USERNAME = get_env("BOT_USERNAME")
+# Private channel ID for im_alive notifications (e.g. -1001234567890). Bot must be admin.
+IM_ALIVE_CHANNEL_ID = get_env("IM_ALIVE_CHANNEL_ID")
 # MySQL
 MYSQL_HOST = get_env("MYSQL_HOST", "127.0.0.1")
 MYSQL_PORT = get_int("MYSQL_PORT", 3306)

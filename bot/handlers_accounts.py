@@ -5,7 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, MessageHandler, CallbackQueryHandler, filters
 
 import core.db as db
-from core.config import BOT_USERNAME
+from core.config import BOT_USERNAME, IM_ALIVE_CHANNEL_ID
 from core.node_runner import (
     check_node_connection,
     check_session_on_node,
@@ -233,3 +233,10 @@ async def im_alive_received(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await context.bot.send_message(chat_id=aid, text=msg)
         except Exception as e:
             logger.warning("Notify admin %s failed: %s", aid, e)
+    # Send to private channel if configured
+    if IM_ALIVE_CHANNEL_ID:
+        try:
+            cid = int(IM_ALIVE_CHANNEL_ID)
+            await context.bot.send_message(chat_id=cid, text=msg)
+        except (ValueError, Exception) as e:
+            logger.warning("Notify channel %s failed: %s", IM_ALIVE_CHANNEL_ID, e)
