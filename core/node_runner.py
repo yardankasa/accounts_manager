@@ -20,6 +20,7 @@ LOGIN_WORKER_REMOTE_PATH = "rezabots_login_worker.py"  # deploy this to node; or
 
 async def check_node_connection(node: dict) -> tuple[bool, str]:
     """Returns (success, message_in_persian)."""
+    logger.info("[NODE_RUNNER] check_node_connection(node_id=%s, is_main=%s)", node.get("id"), node.get("is_main"))
     if node.get("is_main"):
         # Main node: check local session dir
         from .config import SESSION_DIR
@@ -79,6 +80,7 @@ async def run_login_on_node(
     password_callback: async function that returns 2FA password or None.
     Returns (success, message_persian, session_path_on_node or None).
     """
+    logger.info("[NODE_RUNNER] run_login_on_node(node_id=%s, phone=%s)", node_id, phone[:6] if len(phone) >= 6 else "***")
     node = await db.get_node(node_id)
     if not node:
         return False, "نود یافت نشد.", None

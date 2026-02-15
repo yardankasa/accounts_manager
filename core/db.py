@@ -117,6 +117,7 @@ async def ensure_main_node_if_empty() -> None:
 # --- Admins ---
 
 async def is_admin(telegram_user_id: int) -> bool:
+    logger.info("[DB] is_admin(telegram_user_id=%s)", telegram_user_id)
     async with get_conn() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
@@ -124,7 +125,9 @@ async def is_admin(telegram_user_id: int) -> bool:
                 (telegram_user_id,),
             )
             row = await cur.fetchone()
-            return row is not None
+            result = row is not None
+            logger.info("[DB] is_admin(%s) -> %s", telegram_user_id, result)
+            return result
 
 
 async def ensure_admin(telegram_user_id: int) -> None:
@@ -163,22 +166,28 @@ async def get_main_node_id() -> int | None:
 
 
 async def get_node(node_id: int) -> dict[str, Any] | None:
+    logger.info("[DB] get_node(node_id=%s)", node_id)
     async with get_conn() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
                 "SELECT * FROM nodes WHERE id = %s",
                 (node_id,),
             )
-            return await cur.fetchone()
+            row = await cur.fetchone()
+            logger.info("[DB] get_node(%s) -> %s", node_id, "found" if row else "None")
+            return row
 
 
 async def list_nodes() -> list[dict[str, Any]]:
+    logger.info("[DB] list_nodes()")
     async with get_conn() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
                 "SELECT * FROM nodes ORDER BY is_main DESC, id ASC"
             )
-            return await cur.fetchall()
+            rows = await cur.fetchall()
+            logger.info("[DB] list_nodes() -> %s nodes", len(rows))
+            return rows
 
 
 async def create_node(
@@ -214,6 +223,7 @@ BREATH_HOURS = 4
 
 
 async def count_logins_last_24h(node_id: int) -> int:
+    logger.info("[DB] count_logins_last_24h(node_id=%s)", node_id)
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -222,7 +232,9 @@ async def count_logins_last_24h(node_id: int) -> int:
                 (node_id,),
             )
             row = await cur.fetchone()
-            return row[0] if row else 0
+            n = row[0] if row else 0
+            logger.info("[DB] count_logins_last_24h(%s) -> %s", node_id, n)
+            return n
 
 
 async def last_login_at(node_id: int) -> str | None:
@@ -238,8 +250,10 @@ async def last_login_at(node_id: int) -> str | None:
 
 async def can_login_on_node(node_id: int) -> tuple[bool, str]:
     """Returns (allowed, reason_in_persian)."""
+    logger.info("[DB] can_login_on_node(node_id=%s)", node_id)
     count = await count_logins_last_24h(node_id)
     if count >= LOGINS_PER_NODE_PER_24H:
+        logger.info("[DB] can_login_on_node(%s) -> False (24h limit)", node_id)
         return False, f"در ۲۴ ساعت گذشته روی این نود حداکثر {LOGINS_PER_NODE_PER_24H} ورود انجام شده. فردا دوباره امتحان کنید."
     last = await last_login_at(node_id)
     if last:
@@ -253,29 +267,36 @@ async def can_login_on_node(node_id: int) -> tuple[bool, str]:
                 diff_sec = row[0] if row else 0
         if diff_sec < BREATH_HOURS * 3600:
             remain = (BREATH_HOURS * 3600 - diff_sec) // 60
+            logger.info("[DB] can_login_on_node(%s) -> False (breath)", node_id)
             return False, f"بین دو ورود روی یک نود باید حداقل {BREATH_HOURS} ساعت فاصله باشد. حدود {remain} دقیقه دیگر مجاز است."
+    logger.info("[DB] can_login_on_node(%s) -> True", node_id)
     return True, ""
 
 
 async def record_login_event(node_id: int) -> None:
+    logger.info("[DB] record_login_event(node_id=%s)", node_id)
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 "INSERT INTO login_events (node_id, completed_at) VALUES (%s, NOW(6))",
                 (node_id,),
             )
+    logger.info("[DB] record_login_event(%s) done", node_id)
 
 
 # --- Accounts ---
 
 async def create_account(node_id: int, phone: str, session_path: str) -> int:
+    logger.info("[DB] create_account(node_id=%s, phone=%s)", node_id, phone[:6] if len(phone) >= 6 else "***")
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 "INSERT INTO accounts (node_id, phone, session_path) VALUES (%s, %s, %s)",
                 (node_id, phone, session_path),
             )
-            return cur.lastrowid
+            row_id = cur.lastrowid
+    logger.info("[DB] create_account -> id=%s", row_id)
+    return row_id
 
 
 async def list_accounts(node_id: int | None = None) -> list[dict[str, Any]]:

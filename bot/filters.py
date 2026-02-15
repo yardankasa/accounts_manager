@@ -32,16 +32,17 @@ class LoginButtonFilter(filters.MessageFilter):
 
     def filter(self, message):
         if not message or not message.text:
+            logger.info("[LOGIN_FILTER] no message or no text -> False")
             return False
         norm_msg = _normalize_for_match(message.text)
         norm_btn = _normalize_for_match(LOGIN_BUTTON)
         if norm_msg != norm_btn:
-            logger.debug(
-                "Login button mismatch: msg %r (len=%s, repr=%s) vs btn %r (len=%s)",
-                message.text, len(message.text), [hex(ord(c)) for c in message.text],
-                LOGIN_BUTTON, len(LOGIN_BUTTON),
+            logger.info(
+                "[LOGIN_FILTER] mismatch -> False: msg %r (len=%s) vs btn %r (len=%s)",
+                message.text, len(message.text), LOGIN_BUTTON, len(LOGIN_BUTTON),
             )
             return False
+        logger.info("[LOGIN_FILTER] match -> True (text=%r)", message.text)
         return True
 
 
@@ -52,8 +53,13 @@ login_button_filter = LoginButtonFilter()
 async def ensure_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Return True if user is admin; else reply with access denied and return False."""
     if not update.effective_user:
+        logger.info("[ENSURE_ADMIN] no effective_user -> False")
         return False
-    if await db.is_admin(update.effective_user.id):
+    user_id = update.effective_user.id
+    logger.info("[ENSURE_ADMIN] calling db.is_admin(user_id=%s)", user_id)
+    is_admin = await db.is_admin(user_id)
+    logger.info("[ENSURE_ADMIN] db.is_admin(%s) -> %s", user_id, is_admin)
+    if is_admin:
         return True
     if update.message:
         await update.message.reply_text(MSG_ACCESS_DENIED)
