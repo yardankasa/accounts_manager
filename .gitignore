@@ -1,21 +1,35 @@
-# Ignore Python cache and artifacts
+# Ignore Python bytecode/cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.pycache
+*.pycache/
 
-# Build artifacts
+# Ignore Python package/build artifacts
 build/
 dist/
 *.egg-info/
+*.eggs/
 wheels/
+pip-wheel-metadata/
+*.whl
 
-# Python virtual environments
+# Ignore all package dependency files
+Pipfile
+Pipfile.lock
+poetry.lock
+
+requirements-*.txt
+
+# Ignore Python virtual environments (various names)
 .venv/
-env/
 venv/
+env/
 ENV/
+.ENV/
+.pyenv/
+.local/
+.python-version
 
 # Editor and IDE settings
 .vscode/
@@ -27,25 +41,51 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Environment and secrets
+# Environment variables and secrets
 .env
 *.env
+.env.*
 
-# Logs
+# All logs and log files/folders
 *.log
+logs/
+log/
+logs/**
+log/**
+bot_errors.log
+
+# All session files/folders
+session/
+sessions/
+*.session
+*.sqlite3
+*.db
 
 # Test cache and coverage
 .cache/
 .coverage
 htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+coverage.xml
 
 # Miscellaneous/temp files
 *.bak
 *.swp
 *~
+*.tmp
+*.temp
 
-# Project-specific ignores
-.cursor/
-.pytest_cache/
+# Linters, type checking, and extra tooling
 .ruff_cache/
 .mypy_cache/
+.pyre/
+.dmypy.json
+.pyright/
+.pylint.d/
+.coverage.*
+
+# Project-specific
+.cursor/
+# End of python/package/session/log ignore
