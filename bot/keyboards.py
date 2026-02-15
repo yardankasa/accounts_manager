@@ -55,6 +55,14 @@ def account_list_inline(accounts: list[dict]):
     return InlineKeyboardMarkup(buttons) if buttons else None
 
 
+def account_delete_confirm_inline(account_id: int):
+    """Confirmation: Yes / No."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ بله، حذف کن", callback_data=f"delacc_confirm_{account_id}")],
+        [InlineKeyboardButton("❌ خیر، انصراف", callback_data="delacc_cancel")],
+    ])
+
+
 def node_manage_inline(nodes: list[dict]):
     buttons = []
     for n in nodes:
@@ -69,8 +77,17 @@ def node_manage_inline(nodes: list[dict]):
 
 
 def node_delete_confirm_inline(node_id: int):
+    """First confirmation: Yes / No."""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ بله، حذف کن", callback_data=f"nodedel_yes_{node_id}")],
+        [InlineKeyboardButton("❌ خیر، انصراف", callback_data="nodedel_no")],
+    ])
+
+
+def node_delete_final_inline(node_id: int):
+    """Second confirmation: final Yes / No."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ بله، حذف کنم", callback_data=f"nodedel_final_{node_id}")],
         [InlineKeyboardButton("❌ خیر، انصراف", callback_data="nodedel_no")],
     ])
 

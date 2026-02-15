@@ -13,8 +13,8 @@ from core.node_runner import (
 )
 
 from .filters import ensure_admin
-from .keyboards import account_list_inline, main_admin_keyboard
-from .messages import MSG_ACCOUNTS_LIST, MSG_NO_ACCOUNTS, MSG_ACCOUNT_DELETED, MSG_ERROR_GENERIC
+from .keyboards import account_list_inline, account_delete_confirm_inline, main_admin_keyboard
+from .messages import MSG_ACCOUNTS_LIST, MSG_NO_ACCOUNTS, MSG_ACCOUNT_DELETED, MSG_ERROR_GENERIC, MSG_DELETE_ACCOUNT_CONFIRM, MSG_CANCELLED
 from .logging_utils import log_exception
 
 # Button text for "request send message to bot"
@@ -85,17 +85,46 @@ async def account_delete_callback(update: Update, context: ContextTypes.DEFAULT_
     await q.answer()
     if not q.data or not q.data.startswith("delacc_"):
         return
+    chat_id = update.effective_chat.id
+
+    # Cancel: return to accounts list
+    if q.data == "delacc_cancel":
+        await q.edit_message_text(MSG_CANCELLED)
+        accounts = await db.list_accounts()
+        if not accounts:
+            await context.bot.send_message(chat_id=chat_id, text=MSG_NO_ACCOUNTS, reply_markup=main_admin_keyboard())
+            return
+        lines = [f"شماره: {a.get('phone', '')} – نود: {a.get('node_name', '')}" for a in accounts]
+        text = MSG_ACCOUNTS_LIST + "\n\n" + "\n".join(lines)
+        await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=account_list_inline(accounts))
+        return
+
+    # Parse account_id from delacc_{id}, delacc_confirm_{id}, or delacc_final_{id}
+    parts = q.data.split("_")
+    if len(parts) < 2:
+        return
     try:
-        account_id = int(q.data.split("_")[1])
+        account_id = int(parts[-1])
     except (IndexError, ValueError):
         return
+
     acc = await db.get_account(account_id)
     if not acc:
         await q.edit_message_text(MSG_ACCOUNT_DELETED)
         return
+
+    # Step 1: delacc_{id} -> show confirmation
+    if q.data == f"delacc_{account_id}":
+        phone = acc.get("phone", "")
+        text = f"🗑 حذف اکانت {phone}\n\n{MSG_DELETE_ACCOUNT_CONFIRM}"
+        await q.edit_message_text(text, reply_markup=account_delete_confirm_inline(account_id))
+        return
+
+    # Step 2: delacc_confirm_{id} -> actually delete
+    if q.data != f"delacc_confirm_{account_id}":
+        return
     try:
         await db.delete_account(account_id)
-        # Optionally delete session file on main or node
         node = await db.get_node(acc["node_id"])
         if node and node.get("is_main"):
             from pathlib import Path
@@ -107,6 +136,13 @@ async def account_delete_callback(update: Update, context: ContextTypes.DEFAULT_
                     except OSError:
                         pass
         await q.edit_message_text(MSG_ACCOUNT_DELETED)
+        accounts = await db.list_accounts()
+        if accounts:
+            lines = [f"شماره: {a.get('phone', '')} – نود: {a.get('node_name', '')}" for a in accounts]
+            text = MSG_ACCOUNTS_LIST + "\n\n" + "\n".join(lines)
+            await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=account_list_inline(accounts))
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=MSG_NO_ACCOUNTS, reply_markup=main_admin_keyboard())
     except Exception as e:
         log_exception(logger, "Delete account failed", e)
         await q.edit_message_text(MSG_ERROR_GENERIC)

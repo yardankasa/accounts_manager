@@ -14,12 +14,13 @@ import core.limits as limits
 from core.node_runner import check_node_connection
 
 from .filters import ensure_admin
-from .keyboards import node_manage_inline, node_delete_confirm_inline, node_main_no_delete_inline, main_admin_keyboard, back_keyboard, inline_keyboard_clear, BACK_TO_MENU
+from .keyboards import node_manage_inline, node_delete_confirm_inline, node_delete_final_inline, node_main_no_delete_inline, main_admin_keyboard, back_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .messages import (
     MSG_NODES_LIST,
     MSG_NODE_DELETED,
     MSG_NODE_ADDED,
     MSG_DELETE_NODE_CONFIRM,
+    MSG_DELETE_NODE_FINAL,
     MSG_CANCELLED,
     MSG_ERROR_GENERIC,
     MSG_ADMIN_PANEL,
@@ -113,7 +114,22 @@ async def node_delete_confirm_callback(update: Update, context: ContextTypes.DEF
         await q.edit_message_text(MSG_CANCELLED, reply_markup=inline_keyboard_clear)
         await context.bot.send_message(chat_id=chat_id, text=MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())
         return
+    # Step 1: nodedel_yes_{id} -> show second (final) confirmation
     if q.data and q.data.startswith("nodedel_yes_"):
+        try:
+            node_id = int(q.data.split("_")[2])
+        except (IndexError, ValueError):
+            return
+        node = await db.get_node(node_id)
+        if node and node.get("is_main"):
+            await q.edit_message_text(MSG_MAIN_NODE_NO_DELETE, reply_markup=inline_keyboard_clear)
+            await context.bot.send_message(chat_id=chat_id, text=MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())
+            return
+        text = MSG_DELETE_NODE_FINAL
+        await q.edit_message_text(text, reply_markup=node_delete_final_inline(node_id))
+        return
+    # Step 2: nodedel_final_{id} -> actually delete
+    if q.data and q.data.startswith("nodedel_final_"):
         try:
             node_id = int(q.data.split("_")[2])
         except (IndexError, ValueError):
