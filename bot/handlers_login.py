@@ -1,6 +1,7 @@
 """Login flow: ConversationHandler for node -> phone -> code -> 2FA."""
 import asyncio
 import logging
+import re
 
 from telegram import Update
 from telegram.ext import (
@@ -17,7 +18,7 @@ import core.limits as limits
 import core.node_runner as node_runner
 from core.config import SESSION_DIR
 
-from .filters import ensure_admin, login_button_filter
+from .filters import ensure_admin
 from .keyboards import LOGIN_BUTTON, node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .messages import (
     MSG_CHOOSE_NODE,
@@ -307,15 +308,12 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def login_conversation_handler():
-  
-
-    # Use login_button_filter so the login button label matches with Unicode normalization.
+    """Same entry pattern as other menu buttons: MessageHandler + Regex (see main.py)."""
+    # Match exactly like "🖥 مدیریت نودها" / "📋 لیست اکانت‌ها" in main.py
+    login_regex = f"^({re.escape(LOGIN_BUTTON)}|ورود به اکانت)$"
     return ConversationHandler(
         entry_points=[
-             MessageHandler(
-                filters.Regex(f"^{LOGIN_BUTTON}$"),
-                login_entry
-    ),
+            MessageHandler(filters.Regex(login_regex), login_entry),
         ],
         states={
             CHOOSE_NODE: [

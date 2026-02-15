@@ -26,7 +26,7 @@ from core.config import BOT_TOKEN, PROXY_URL, SESSION_DIR, LOGS_DIR
 from core import db
 from bot.logging_utils import setup_logging
 from bot.handlers_admin import cmd_admin, main_menu_back
-from bot.handlers_login import login_conversation_handler
+from bot.handlers_login import login_conversation_handler , login_entry
 from bot.handlers_accounts import accounts_list, account_delete_callback
 from bot.handlers_nodes import (
     nodes_list,
@@ -113,13 +113,14 @@ def main() -> None:
         group=-1,
     )
     # Login conversation first so "Account Loginer" is handled before other menu handlers
-    app.add_handler(login_conversation_handler())
+    #app.add_handler(login_conversation_handler())
     app.add_handler(MessageHandler(
         filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت / انصراف|بازگشت|انصراف)$"),
         main_menu_back,
     ))
     app.add_handler(MessageHandler(filters.Regex("^(🖥 مدیریت نودها|مدیریت نودها)$"), nodes_list))
     app.add_handler(MessageHandler(filters.Regex("^(📋 لیست اکانت‌ها|لیست اکانت‌ها)$"), accounts_list))
+    app.add_handler(MessageHandler(filters.Regex("^(Account Loginer|ورود به اکانت)$"), login_entry))
     app.add_handler(node_add_conversation_handler())
     app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_[0-9]+$"))
     app.add_handler(CallbackQueryHandler(node_delete_confirm_callback, pattern="^nodedel_"))
