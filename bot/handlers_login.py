@@ -336,7 +336,8 @@ def login_conversation_handler():
             MessageHandler(filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت|انصراف|بازگشت / انصراف)$"), login_cancel),
             CommandHandler("cancel", login_cancel),
         ],
-        per_message=True,
+        # per_message=False so callback_query (on bot's message) shares state with the message that started the flow
+        per_message=False,
         per_chat=True,
         per_user=True,
     )
