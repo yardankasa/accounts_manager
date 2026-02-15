@@ -26,6 +26,8 @@ PROXY_URL = get_env("PROXY_URL")
 API_ID = get_int("API_ID")
 API_HASH = get_env("API_HASH")
 ADMIN_IDS_STR = get_env("ADMIN_IDS")  # comma-separated for bootstrap
+# Channel/group ID where account status reports are sent (e.g. -1001234567890)
+STATUS_CHANNEL_ID = get_env("STATUS_CHANNEL_ID")
 
 # MySQL
 MYSQL_HOST = get_env("MYSQL_HOST", "127.0.0.1")

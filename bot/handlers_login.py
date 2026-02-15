@@ -36,6 +36,7 @@ from .messages import (
     MSG_LOGIN_CANCELLED,
     MSG_MAX_WRONG_CODE,
     MSG_BACK_HINT,
+    MSG_ADMIN_PANEL,
 )
 from .logging_utils import log_exception
 
@@ -246,7 +247,7 @@ async def login_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("[LOGIN_SERVICE] calling db.record_login_event(%s)", node_id)
                 await db.record_login_event(node_id)
                 logger.info("[LOGIN_SERVICE] calling db.create_account(node_id=%s, phone=%s)", node_id, phone[:6])
-                await db.create_account(node_id, phone, session_path)
+                await db.create_account(node_id, phone, session_path, api_id=api_id, api_hash=api_hash)
             await bot.send_message(chat_id, msg)
         except Exception as e:
             log_exception(logger, "Login task failed", e)
@@ -270,16 +271,18 @@ async def login_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
     text = (update.message.text or "").strip()
+    # If login already succeeded, "بازگشت به منو" = go to main menu (not "cancelled")
+    if context.user_data.get("_login_done"):
+        for k in list(context.user_data.keys()):
+            if k.startswith("_"):
+                context.user_data.pop(k, None)
+        await update.message.reply_text(MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())
+        return ConversationHandler.END
     if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_login_task", None)
         context.user_data.pop("_code_future", None)
         context.user_data.pop("_password_future", None)
         await update.message.reply_text(MSG_LOGIN_CANCELLED, reply_markup=main_admin_keyboard())
-        return ConversationHandler.END
-    if context.user_data.get("_login_done"):
-        for k in list(context.user_data.keys()):
-            if k.startswith("_"):
-                context.user_data.pop(k, None)
         return ConversationHandler.END
     password_future = context.user_data.get("_password_future")
     code_future = context.user_data.get("_code_future")
@@ -296,6 +299,13 @@ async def login_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("[LOGIN_CANCEL] called")
     if not await ensure_admin(update, context):
+        return ConversationHandler.END
+    # If login already succeeded, show main menu (not "cancelled")
+    if context.user_data.get("_login_done"):
+        for k in list(context.user_data.keys()):
+            if k.startswith("_"):
+                context.user_data.pop(k, None)
+        await update.message.reply_text(MSG_ADMIN_PANEL, reply_markup=main_admin_keyboard())
         return ConversationHandler.END
     task = context.user_data.pop("_login_task", None)
     if task and not task.done():

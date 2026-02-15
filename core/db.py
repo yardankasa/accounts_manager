@@ -95,6 +95,17 @@ async def _ensure_tables() -> None:
                     FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
                 )
             """)
+    # Add api_id/api_hash to accounts if missing (for session status check)
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            try:
+                await cur.execute("ALTER TABLE accounts ADD COLUMN api_id INT NULL")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE accounts ADD COLUMN api_hash VARCHAR(64) NULL")
+            except Exception:
+                pass
     logger.info("Tables ensured")
     await ensure_main_node_if_empty()
 
@@ -286,13 +297,17 @@ async def record_login_event(node_id: int) -> None:
 
 # --- Accounts ---
 
-async def create_account(node_id: int, phone: str, session_path: str) -> int:
+async def create_account(
+    node_id: int, phone: str, session_path: str,
+    api_id: int | None = None, api_hash: str | None = None,
+) -> int:
     logger.info("[DB] create_account(node_id=%s, phone=%s)", node_id, phone[:6] if len(phone) >= 6 else "***")
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "INSERT INTO accounts (node_id, phone, session_path) VALUES (%s, %s, %s)",
-                (node_id, phone, session_path),
+                """INSERT INTO accounts (node_id, phone, session_path, api_id, api_hash)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (node_id, phone, session_path, api_id, api_hash),
             )
             row_id = cur.lastrowid
     logger.info("[DB] create_account -> id=%s", row_id)

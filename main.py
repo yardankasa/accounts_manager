@@ -27,7 +27,7 @@ from core import db
 from bot.logging_utils import setup_logging
 from bot.handlers_admin import cmd_admin, main_menu_back
 from bot.handlers_login import login_conversation_handler
-from bot.handlers_accounts import accounts_list, account_delete_callback
+from bot.handlers_accounts import accounts_list, account_delete_callback, account_status_callback
 from bot.handlers_nodes import (
     nodes_list,
     node_manage_callback,
@@ -123,6 +123,7 @@ def main() -> None:
     app.add_handler(node_add_conversation_handler())
     app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_[0-9]+$"))
     app.add_handler(CallbackQueryHandler(node_delete_confirm_callback, pattern="^nodedel_"))
+    app.add_handler(CallbackQueryHandler(account_status_callback, pattern="^statusacc_"))
     app.add_handler(CallbackQueryHandler(account_delete_callback, pattern="^delacc_"))
 
     logger.info("Bot starting (polling)")

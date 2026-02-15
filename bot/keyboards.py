@@ -46,8 +46,12 @@ def node_choice_inline(nodes_with_remaining: list[tuple[int, str, int]]):
 def account_list_inline(accounts: list[dict]):
     buttons = []
     for a in accounts:
-        label = f"{a.get('phone', '')} – {a.get('node_name', '')}"
-        buttons.append([InlineKeyboardButton(f"🗑 حذف {a.get('phone', '')}", callback_data=f"delacc_{a['id']}")])
+        phone = a.get("phone", "")
+        row = [
+            InlineKeyboardButton("📊 وضعیت", callback_data=f"statusacc_{a['id']}"),
+            InlineKeyboardButton(f"🗑 حذف {phone}", callback_data=f"delacc_{a['id']}"),
+        ]
+        buttons.append(row)
     return InlineKeyboardMarkup(buttons) if buttons else None
 
 

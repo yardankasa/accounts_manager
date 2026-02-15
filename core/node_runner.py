@@ -140,6 +140,68 @@ async def run_login_on_node(
         return False, "خطا در اجرای ورود روی نود: " + str(e)[:80], None
 
 
+async def check_session_on_node(
+    node: dict,
+    session_path: str,
+    api_id: int,
+    api_hash: str,
+) -> tuple[bool, str]:
+    """
+    Check if session is active. Returns (is_active, error_or_empty).
+    For main node: runs locally. For remote: runs status_check_worker via SSH.
+    """
+    if node.get("is_main"):
+        from . import session_status
+        ok, err = await session_status.check_session_status(session_path, api_id, api_hash)
+        return ok, err or ""
+    # Remote: SSH and run status worker
+    host = node.get("ssh_host")
+    user = node.get("ssh_user")
+    port = int(node.get("ssh_port") or 22)
+    kwargs = {"host": host, "port": port, "username": user}
+    if node.get("ssh_key_path"):
+        kwargs["client_keys"] = [node["ssh_key_path"]]
+    elif node.get("ssh_password"):
+        kwargs["password"] = node["ssh_password"]
+    else:
+        return False, "SSH not configured"
+    worker_path = _APP_ROOT / "scripts" / "status_check_worker.py"
+    if not worker_path.exists():
+        return False, "Status worker script not found"
+    script_content = worker_path.read_text()
+    remote_path = f"/tmp/rezabots_status_worker_{node.get('id', 0)}.py"
+    try:
+        conn = await asyncio.wait_for(asyncssh.connect(**kwargs), timeout=15)
+        try:
+            async with conn.start_sftp_client() as sftp:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+                    f.write(script_content)
+                    local_path = f.name
+                try:
+                    await sftp.put(local_path, remote_path)
+                finally:
+                    Path(local_path).unlink(missing_ok=True)
+            result = await conn.run(
+                f"python3 -u {remote_path}",
+                env={
+                    "API_ID": str(api_id),
+                    "API_HASH": api_hash,
+                    "SESSION_PATH": session_path,
+                },
+            )
+            out = (result.stdout or "").strip()
+            if out.startswith("ACTIVE"):
+                return True, ""
+            return False, out.replace("INACTIVE ", "", 1) if out.startswith("INACTIVE ") else out or "Unknown"
+        finally:
+            conn.close()
+    except asyncio.TimeoutError:
+        return False, "Connection timeout"
+    except Exception as e:
+        logger.exception("Check session on node failed: %s", e)
+        return False, str(e)[:80]
+
+
 async def _bridge_process(process, code_callback, password_callback, session_base_path: str, phone: str):
     """Read process stdout line by line; when NEED_CODE/NEED_2FA, call callback and write to stdin."""
     session_path = None
