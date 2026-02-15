@@ -113,14 +113,14 @@ def main() -> None:
         group=-1,
     )
     # Login conversation first so "Account Loginer" is handled before other menu handlers
-    app.add_handler(login_conversation_handler())
+ 
     app.add_handler(MessageHandler(
         filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت / انصراف|بازگشت|انصراف)$"),
         main_menu_back,
     ))
     app.add_handler(MessageHandler(filters.Regex("^(🖥 مدیریت نودها|مدیریت نودها)$"), nodes_list))
     app.add_handler(MessageHandler(filters.Regex("^(📋 لیست اکانت‌ها|لیست اکانت‌ها)$"), accounts_list))
-    # app.add_handler(MessageHandler(filters.Regex("^(Account Loginer|ورود به اکانت)$"), login_entry))
+    app.add_handler(MessageHandler(filters.Regex("^({re.escape(LOGIN_BUTTON)}|ورود به اکانت)$"), login_entry))
     app.add_handler(node_add_conversation_handler())
     app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_[0-9]+$"))
     app.add_handler(CallbackQueryHandler(node_delete_confirm_callback, pattern="^nodedel_"))
