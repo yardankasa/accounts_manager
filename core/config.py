@@ -28,6 +28,8 @@ API_HASH = get_env("API_HASH")
 ADMIN_IDS_STR = get_env("ADMIN_IDS")  # comma-separated for bootstrap
 # Channel/group ID where account status reports are sent (e.g. -1001234567890)
 STATUS_CHANNEL_ID = get_env("STATUS_CHANNEL_ID")
+# Commander user/chat ID - receives status check summaries (human-readable)
+COMMANDER_ID = get_env("COMMANDER_ID")
 
 # MySQL
 MYSQL_HOST = get_env("MYSQL_HOST", "127.0.0.1")

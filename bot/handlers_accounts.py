@@ -5,8 +5,12 @@ from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, CallbackQueryHandler, filters
 
 import core.db as db
-from core.config import STATUS_CHANNEL_ID
-from core.node_runner import check_node_connection, check_session_on_node
+from core.config import STATUS_CHANNEL_ID, COMMANDER_ID
+from core.node_runner import (
+    check_node_connection,
+    check_session_on_node,
+    add_account_as_channel_admin_on_node,
+)
 
 from .filters import ensure_admin
 from .keyboards import account_list_inline, main_admin_keyboard
@@ -51,6 +55,31 @@ def _format_status_report(
         f"📅 Time Account Login: {created_str}\n"
         f"🖥 Node: {node_name}\n"
         f"━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+def _format_commander_summary(
+    phone: str,
+    is_active: bool,
+    add_admin_ok: bool,
+    add_admin_err: str,
+    channel_sent: bool,
+    node_name: str,
+) -> str:
+    """Human-readable summary for COMMANDER_ID."""
+    masked = _mask_phone(phone)
+    status = "✅ Active" if is_active else "❌ Inactive"
+    if is_active:
+        admin = "✅ Added as admin" if add_admin_ok else f"❌ Add admin failed: {add_admin_err}"
+    else:
+        admin = "⏭ Skipped (session inactive)"
+    channel = "✅ Sent to channel" if channel_sent else "❌ Failed to send"
+    return (
+        f"📋 Status check: {masked}\n"
+        f"   Session: {status}\n"
+        f"   Admin in channel: {admin}\n"
+        f"   Report to channel: {channel}\n"
+        f"   Node: {node_name}"
     )
 
 
@@ -148,6 +177,15 @@ async def account_status_callback(update: Update, context: ContextTypes.DEFAULT_
     session_path = acc["session_path"]
     is_active, error = await check_session_on_node(node, session_path, api_id, api_hash)
     checked_at = datetime.now(timezone.utc)
+
+    # Step 1: If active, add account as admin in STATUS_CHANNEL_ID, then send report
+    add_admin_ok = False
+    add_admin_err = ""
+    if is_active:
+        add_admin_ok, add_admin_err = await add_account_as_channel_admin_on_node(
+            node, session_path, api_id, api_hash, channel_id
+        )
+
     ca = acc.get("created_at")
     created_at = ca.strftime("%Y-%m-%d %H:%M") if hasattr(ca, "strftime") and ca else (str(ca) if ca else None)
     report = _format_status_report(
@@ -158,9 +196,27 @@ async def account_status_callback(update: Update, context: ContextTypes.DEFAULT_
         created_at=created_at,
         error=error,
     )
+    channel_sent = False
     try:
         await context.bot.send_message(chat_id=channel_id, text=report)
+        channel_sent = True
         await q.edit_message_text("✅ گزارش وضعیت به کانال ارسال شد.")
     except Exception as e:
         log_exception(logger, "Send status to channel failed", e)
         await q.edit_message_text(f"❌ خطا در ارسال به کانال: {str(e)[:80]}")
+
+    # Step 2: Always send human-readable summary to COMMANDER_ID
+    if COMMANDER_ID:
+        try:
+            commander_id = int(COMMANDER_ID)
+            summary = _format_commander_summary(
+                phone=acc["phone"],
+                is_active=is_active,
+                add_admin_ok=add_admin_ok,
+                add_admin_err=add_admin_err,
+                channel_sent=channel_sent,
+                node_name=acc.get("node_name", "—"),
+            )
+            await context.bot.send_message(chat_id=commander_id, text=summary)
+        except (ValueError, Exception) as e:
+            log_exception(logger, "Send commander summary failed", e)
