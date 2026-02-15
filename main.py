@@ -1,5 +1,6 @@
 """Entry point: init DB, bootstrap admins, run bot."""
 import logging
+import os
 import sys
 
 # Ensure application root (directory containing main.py) is on path for "core" and "bot"
@@ -21,7 +22,7 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 
-from core.config import BOT_TOKEN, SESSION_DIR, LOGS_DIR
+from core.config import BOT_TOKEN, PROXY_URL, SESSION_DIR, LOGS_DIR
 from core import db
 from bot.logging_utils import setup_logging
 from bot.handlers_admin import cmd_admin, main_menu_back
@@ -83,8 +84,18 @@ def main() -> None:
         await db.close_pool()
         logger.info("DB pool closed")
 
+    # Use proxy only from .env (PROXY_URL); ignore HTTP_PROXY/HTTPS_PROXY so invalid schemes like socks:// don't break
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        os.environ.pop(key, None)
+    proxy = None
+    if PROXY_URL:
+        # httpx accepts socks5:// or socks4://, not socks://
+        url = PROXY_URL.strip()
+        if url.startswith("socks://"):
+            url = "socks5://" + url[8:]
+        proxy = url
     # Longer timeouts for slow or restricted networks (e.g. servers that need proxy or high latency)
-    request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0, write_timeout=30.0)
+    request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0, write_timeout=30.0, proxy=proxy)
     app = (
         Application.builder()
         .token(BOT_TOKEN)

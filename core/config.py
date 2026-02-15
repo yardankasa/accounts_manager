@@ -20,6 +20,9 @@ def get_int(key: str, default: int = 0) -> int:
 
 # Bot
 BOT_TOKEN = get_env("BOT_TOKEN")
+# Optional proxy (e.g. socks5://127.0.0.1:10808). Leave empty for no proxy.
+# If set, this is used for the bot; env vars HTTP_PROXY/HTTPS_PROXY are ignored for the bot.
+PROXY_URL = get_env("PROXY_URL")
 API_ID = get_int("API_ID")
 API_HASH = get_env("API_HASH")
 ADMIN_IDS_STR = get_env("ADMIN_IDS")  # comma-separated for bootstrap

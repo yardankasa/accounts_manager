@@ -14,17 +14,21 @@ logger = logging.getLogger(__name__)
 # Zero-width chars Telegram may insert in Persian keyboard button text (ZWNJ, ZWSP, ZWJ, BOM)
 _ZERO_WIDTH = frozenset("\u200b\u200c\u200d\ufeff")
 
+# Arabic/Persian variants that look the same but have different code points (normalize to Persian form for matching)
+_ARABIC_TO_PERSIAN = str.maketrans("\u0643\u064a", "\u06a9\u06cc")  # ك->ک, ي->ی
+
 
 def _normalize_for_match(s: str) -> str:
-    """NFC normalize and remove zero-width characters so button text matches when Telegram adds ZWNJ."""
+    """NFC normalize, remove zero-width chars, and unify Arabic/Persian variants so button text matches."""
     s = (s or "").strip()
     s = unicodedata.normalize("NFC", s)
     s = "".join(c for c in s if c not in _ZERO_WIDTH)
+    s = s.translate(_ARABIC_TO_PERSIAN)
     return s
 
 
 class LoginButtonFilter(filters.MessageFilter):
-    """Match 'ورود به اکانت' even if Telegram sends NFD or inserts ZWNJ in the text."""
+    """Match 'ورود به اکانت' even if Telegram sends NFD, ZWNJ, or Arabic variant letters (ك/ي)."""
 
     def filter(self, message):
         if not message or not message.text:
@@ -33,8 +37,8 @@ class LoginButtonFilter(filters.MessageFilter):
         norm_btn = _normalize_for_match(LOGIN_BUTTON)
         if norm_msg != norm_btn:
             logger.debug(
-                "Login button mismatch: msg %r (len=%s) vs btn %r (len=%s)",
-                message.text, len(message.text),
+                "Login button mismatch: msg %r (len=%s, repr=%s) vs btn %r (len=%s)",
+                message.text, len(message.text), [hex(ord(c)) for c in message.text],
                 LOGIN_BUTTON, len(LOGIN_BUTTON),
             )
             return False
