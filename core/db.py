@@ -301,12 +301,17 @@ async def create_account(
     node_id: int, phone: str, session_path: str,
     api_id: int | None = None, api_hash: str | None = None,
 ) -> int:
-    logger.info("[DB] create_account(node_id=%s, phone=%s)", node_id, phone[:6] if len(phone) >= 6 else "***")
+    logger.info("[DB] create_account(node_id=%s, phone=%s, api_id=%s)", node_id, phone[:6] if len(phone) >= 6 else "***", api_id)
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 """INSERT INTO accounts (node_id, phone, session_path, api_id, api_hash)
-                   VALUES (%s, %s, %s, %s, %s)""",
+                   VALUES (%s, %s, %s, %s, %s)
+                   ON DUPLICATE KEY UPDATE
+                     session_path = VALUES(session_path),
+                     api_id = VALUES(api_id),
+                     api_hash = VALUES(api_hash),
+                     id = LAST_INSERT_ID(id)""",
                 (node_id, phone, session_path, api_id, api_hash),
             )
             row_id = cur.lastrowid

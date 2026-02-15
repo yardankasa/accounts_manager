@@ -140,6 +140,43 @@ async def run_login_on_node(
         return False, "خطا در اجرای ورود روی نود: " + str(e)[:80], None
 
 
+async def delete_session_on_node(node: dict, session_path: str) -> None:
+    """
+    Delete old session files before re-login. Main node: delete locally.
+    Remote: SSH and run rm.
+    """
+    if node.get("is_main"):
+        from pathlib import Path
+        p = Path(session_path)
+        if p.exists():
+            for f in p.parent.glob(p.name + "*"):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        return
+    # Remote: SSH and rm
+    host = node.get("ssh_host")
+    user = node.get("ssh_user")
+    port = int(node.get("ssh_port") or 22)
+    kwargs = {"host": host, "port": port, "username": user}
+    if node.get("ssh_key_path"):
+        kwargs["client_keys"] = [node["ssh_key_path"]]
+    elif node.get("ssh_password"):
+        kwargs["password"] = node["ssh_password"]
+    else:
+        return
+    try:
+        conn = await asyncio.wait_for(asyncssh.connect(**kwargs), timeout=15)
+        try:
+            # Session path is typically /base/phone; Telethon creates /base/phone.session
+            await conn.run(f'rm -f "{session_path}"*')
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning("Delete session on remote node failed: %s", e)
+
+
 async def check_session_on_node(
     node: dict,
     session_path: str,

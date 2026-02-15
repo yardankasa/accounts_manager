@@ -23,6 +23,7 @@ from .keyboards import LOGIN_BUTTON, node_choice_inline, back_keyboard, main_adm
 from .messages import (
     MSG_CHOOSE_NODE,
     MSG_NO_NODE_CAPACITY,
+    MSG_PHONE_ALREADY_EXISTS,
     MSG_ENTER_API_ID,
     MSG_ENTER_API_HASH,
     MSG_INVALID_API_ID,
@@ -200,6 +201,11 @@ async def login_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ENTER_PHONE
     node_id = context.user_data["_node_id"]
     node = context.user_data["_node"]
+    # Check if this phone already exists on this node (re-login)
+    existing = await db.get_account_by_phone(phone, node_id)
+    if existing:
+        await update.message.reply_text(MSG_PHONE_ALREADY_EXISTS)
+        context.user_data["_replace_existing_session"] = existing
     session_base = node["session_base_path"] if node.get("session_base_path") else str(SESSION_DIR)
     if node.get("is_main"):
         session_base = str(SESSION_DIR)
@@ -232,6 +238,10 @@ async def login_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     async def run_and_finish():
         try:
+            # Delete old session if re-login (same phone on same node)
+            existing = context.user_data.pop("_replace_existing_session", None)
+            if existing and existing.get("session_path"):
+                await node_runner.delete_session_on_node(node, existing["session_path"])
             logger.info("[LOGIN_SERVICE] calling node_runner.run_login_on_node(node_id=%s, phone=%s)", node_id, phone[:6])
             success, msg, session_path = await node_runner.run_login_on_node(
                 node_id=node_id,
