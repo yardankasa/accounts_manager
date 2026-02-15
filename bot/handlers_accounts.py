@@ -5,7 +5,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, CallbackQueryHandler, filters
 
 import core.db as db
-from core.config import API_ID, API_HASH, STATUS_CHANNEL_ID
+from core.config import STATUS_CHANNEL_ID
 from core.node_runner import check_node_connection, check_session_on_node
 
 from .filters import ensure_admin
@@ -122,12 +122,12 @@ async def account_status_callback(update: Update, context: ContextTypes.DEFAULT_
     if not acc:
         await q.edit_message_text("اکانت یافت نشد.")
         return
-    api_id = acc.get("api_id") or API_ID
-    api_hash = acc.get("api_hash") or API_HASH
+    api_id = acc.get("api_id")
+    api_hash = acc.get("api_hash")
     if not api_id or not api_hash:
         await q.edit_message_text(
-            "❌ API_ID و API_HASH برای بررسی وضعیت تنظیم نشده.\n"
-            "در .env مقدار دهید یا اکانت را دوباره وارد کنید."
+            "❌ API_ID و API_HASH این اکانت در دیتابیس ذخیره نشده.\n"
+            "اکانت را دوباره وارد کنید تا ذخیره شود."
         )
         return
     if not STATUS_CHANNEL_ID:
