@@ -307,10 +307,15 @@ async def login_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def login_conversation_handler():
+  
+
     # Use login_button_filter so the login button label matches with Unicode normalization.
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.TEXT & login_button_filter, login_entry),
+             MessageHandler(
+                filters.Regex(f"^{LOGIN_BUTTON}$"),
+                login_entry
+    ),
         ],
         states={
             CHOOSE_NODE: [
