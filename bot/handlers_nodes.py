@@ -287,7 +287,7 @@ def node_add_conversation_handler():
         fallbacks=[
             MessageHandler(filters.Regex("^(🏠 بازگشت به منو|بازگشت به منو|بازگشت|انصراف)$"), add_node_cancel),
         ],
-        per_message=True,
+        per_message=False,  # Entry is callback; text replies are new messages with different message_id
         per_chat=True,
         per_user=True,
     )
