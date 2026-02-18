@@ -99,6 +99,8 @@ python -m cli_bots.humantic_actions
 
 Flow for each account: **join channels** (random order) → wait → **join chats** (random order) → wait → **send PV** (one message per link). Then the next account. All steps use safe delays (see `cli_bots/humantic_actions/config.py`). Links are read from `data/links_pool/channels.json`, `chats.json`, `pv.json`. Accounts must have `api_id` and `api_hash` set (from login).
 
+**Resume after crash:** If the script stops (kill, crash, etc.), run it again: it will **continue** from the last saved position (no re-joining channels/chats, no duplicate PV). State is stored in `data/humantic_state.json` and is only used for runs started within the last 2 hours.
+
 ---
 
 ## Architecture

@@ -15,6 +15,12 @@ from core.config import DATA_DIR
 # Links pool: channels.json, chats.json, pv.json
 LINKS_POOL_DIR = DATA_DIR / "links_pool"
 
+# Resume state: if script crashes, next run continues from here (no re-join / no duplicate PV).
+# State is only used when it's from a recent run (see RESUME_MAX_AGE_SECONDS).
+STATE_FILE = DATA_DIR / "humantic_state.json"
+# Consider state "stale" after this many seconds; then we start a fresh run.
+RESUME_MAX_AGE_SECONDS = 2 * 3600  # 2 hours
+
 # Calm delays (seconds) — v1: safe and slow
 DELAY_BETWEEN_JOINS_MIN = 15
 DELAY_BETWEEN_JOINS_MAX = 45

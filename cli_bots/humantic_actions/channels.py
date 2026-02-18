@@ -57,14 +57,30 @@ async def _join_one(client: "TelegramClient", link: str) -> bool:
         return False
 
 
+def _shuffled_order(items: list[dict], seed: str | None) -> list[dict]:
+    """Stable order: if seed is set, shuffle is reproducible for resume."""
+    order = list(items)
+    if seed is not None:
+        random.Random(seed).shuffle(order)
+    else:
+        random.shuffle(order)
+    return order
+
+
 async def run_join_channels(
     client: "TelegramClient",
     delay_min: int | None = None,
     delay_max: int | None = None,
+    *,
+    start_from_index: int = 0,
+    on_progress=None,
+    shuffle_seed: str | None = None,
 ) -> None:
     """
     Join all channels from links pool in random order, with calm delays.
     Safe to call multiple times (skips or no-ops if already in).
+    For resume: pass start_from_index and on_progress( next_index, total ).
+    shuffle_seed makes order reproducible so resume index matches.
     """
     channels = get_channels_list()
     if not channels:
@@ -72,14 +88,19 @@ async def run_join_channels(
         return
     delay_min = delay_min if delay_min is not None else DELAY_BETWEEN_JOINS_MIN
     delay_max = delay_max if delay_max is not None else DELAY_BETWEEN_JOINS_MAX
-    order = list(channels)
-    random.shuffle(order)
-    for i, ch in enumerate(order):
+    order = _shuffled_order(channels, shuffle_seed)
+    total = len(order)
+    for i in range(start_from_index, total):
+        ch = order[i]
         link = ch.get("link")
         if not link:
+            if on_progress:
+                on_progress(i + 1, total)
             continue
         await _join_one(client, link)
-        if i < len(order) - 1:
+        if on_progress:
+            on_progress(i + 1, total)
+        if i < total - 1:
             wait = random.randint(delay_min, delay_max)
             logger.debug("Waiting %s s before next channel.", wait)
             await asyncio.sleep(wait)
