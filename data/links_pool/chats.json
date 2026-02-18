@@ -1,0 +1,9 @@
+{
+    "chats": [
+        {"name": "chat1", "link": "https://t.me/CpanelGroup","id": -1001234567890},
+        {"name": "chat2", "link": "https://t.me/tadwingarangroup","id": -1001234567891},
+        {"name": "chat3", "link": "https://t.me/gp_webmaster","id": -1001234567892},
+        {"name": "chat4", "link": "https://t.me/blueproocean","id": -1001234567893}
+
+    ]
+}

@@ -1,0 +1,16 @@
+{
+
+    "channels": [
+        {"name": "Poroximel", "link": "https://t.me/Poroximel","id": -100},
+        {"name": "siiibtorsh", "link": "https://t.me/siiibtorsh","id": -100},
+        {"name": "kafiha", "link": "https://t.me/kafiha","id": -100},
+        {"name": "telegram", "link": "https://t.me/telegram","id": -100},
+        {"name": "username", "link": "https://t.me/username","id": -100},
+        {"name": "TAndroidAPK", "link": "https://t.me/TAndroidAPK","id": -100},
+        {"name": "durov", "link": "https://t.me/durov","id": -100},
+        {"name": "toncoin", "link": "https://t.me/toncoin","id": -100},
+        {"name": "BotTalk", "link": "https://t.me/BotTalk","id": -100},
+        {"name": "premium", "link": "https://t.me/premium","id": -100}
+
+    ]
+}

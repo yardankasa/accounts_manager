@@ -224,3 +224,13 @@ If you see `telegram.error.TimedOut` or `httpx.ConnectTimeout` at each step, the
 | Use | Telegram | Send `/admin`, then use the Persian menu |
 
 API_ID and API_HASH are **always entered in the bot** for each login, not taken from `.env`.
+
+
+
+
+---
+## Local Dev
+
+```bash
+export PYTHONPATH="/home/mahdi/Projects/rezabots/src:$PYTHONPATH"
+```
