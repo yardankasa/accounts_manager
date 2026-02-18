@@ -86,6 +86,19 @@ On startup the app: creates `data/session` and `logs`, initialises the DB pool, 
 2. If your Telegram user ID is in `ADMIN_IDS`, you get the panel (ورود به اکانت, مدیریت نودها, لیست اکانت‌ها).
 3. **Login flow**: ورود به اکانت → choose node → enter **API_ID** → **API_HASH** → phone → code (and 2FA if needed). Sessions are stored on the chosen node (main = local `data/session`, others = path on that server).
 
+### Humantic actions (v1)
+
+Simulate a normal user to reduce ban risk: join channels/chats and send one PM to PV links from `data/links_pool/`, with calm random delays. Runs **per account**, one account after another, reading accounts from DB (main node only in v1).
+
+**Run from `src`:**
+
+```bash
+cd src
+python -m cli_bots.humantic_actions
+```
+
+Flow for each account: **join channels** (random order) → wait → **join chats** (random order) → wait → **send PV** (one message per link). Then the next account. All steps use safe delays (see `cli_bots/humantic_actions/config.py`). Links are read from `data/links_pool/channels.json`, `chats.json`, `pv.json`. Accounts must have `api_id` and `api_hash` set (from login).
+
 ---
 
 ## Architecture
@@ -144,8 +157,10 @@ On startup the app: creates `data/session` and `logs`, initialises the DB pool, 
 | `bot/filters.py` | `ensure_admin(update, context)` |
 | `bot/logging_utils.py` | File + stdout logging |
 | `scripts/login_worker.py` | Telethon script for **nodes**: reads env (API_ID, API_HASH, phone, session path), stdin = code/2FA, stdout = NEED_CODE/NEED_2FA/OK/ERROR |
+| `cli_bots/humantic_actions/` | **Humantic v1**: read accounts from DB (main node), join channels/chats and send PV from `data/links_pool/` with calm delays; run via `python -m cli_bots.humantic_actions` |
+| `data/links_pool/` | JSON pools: `channels.json`, `chats.json`, `pv.json` (links used by humantic actions) |
 
-Data at **project root**: `.env`, `data/session/` (main node sessions), `logs/` (e.g. `bot_errors.log`).
+Data at **project root**: `.env`, `data/session/` (main node sessions), `data/links_pool/` (channel/chat/PV links), `logs/` (e.g. `bot_errors.log`).
 
 ---
 

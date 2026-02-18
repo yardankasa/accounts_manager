@@ -1,18 +1,78 @@
-# Here for functions that are Very Carefully Joined to Humantic Actions for Joining
-# Into Chats  Randomly Selected by the Range 
-import json
-from core.config import SESSION_DIR
-from telethon import TelegramClient
+"""
+Humantic actions: join chats (groups/supergroups) in random order with calm delays.
+"""
+import asyncio
+import logging
+import random
+from typing import TYPE_CHECKING
 
-with open("data/links_pool/chats.json", "r") as f:
-    chats = json.load(f)["chats"]
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest
 
-def get_chats_list(with_name: bool = False):
-    chats_list = []
-    for chat in chats:
-        if with_name:
-            chats_list.append({"name": chat["name"], "link": chat["link"], "id": chat["id"]})
+from .config import DELAY_BETWEEN_JOINS_MIN, DELAY_BETWEEN_JOINS_MAX
+from .data_loader import get_chats_list
+
+if TYPE_CHECKING:
+    from telethon import TelegramClient
+
+logger = logging.getLogger(__name__)
+
+
+def _is_joinchat_link(link: str) -> bool:
+    return "/joinchat/" in link or "/+" in link
+
+
+def _extract_joinchat_hash(link: str) -> str | None:
+    link = link.strip()
+    for prefix in ("https://t.me/joinchat/", "https://t.me/+", "t.me/joinchat/", "t.me/+"):
+        if link.startswith(prefix):
+            return link.split(prefix, 1)[1].split("?")[0].strip()
+    return None
+
+
+async def _join_one(client: "TelegramClient", link: str) -> bool:
+    try:
+        if _is_joinchat_link(link):
+            hash_part = _extract_joinchat_hash(link)
+            if not hash_part:
+                logger.warning("Could not parse joinchat link: %s", link[:50])
+                return False
+            await client(ImportChatInviteRequest(hash_part))
+            logger.info("Joined chat (invite): %s", link[:50])
         else:
-            chats_list.append({"link": chat["link"], "id": chat["id"]})
-    return chats_list
+            entity = await client.get_entity(link)
+            await client(JoinChannelRequest(entity))
+            logger.info("Joined chat: %s", link[:50])
+        return True
+    except Exception as e:
+        err = str(e).lower()
+        if "already" in err or "participant" in err or "invite" in err:
+            logger.debug("Already in or invite issue for %s: %s", link[:50], e)
+            return True
+        logger.warning("Join chat failed for %s: %s", link[:50], e)
+        return False
 
+
+async def run_join_chats(
+    client: "TelegramClient",
+    delay_min: int | None = None,
+    delay_max: int | None = None,
+) -> None:
+    """Join all chats from links pool in random order, with calm delays."""
+    chats = get_chats_list()
+    if not chats:
+        logger.info("No chats in pool, skipping.")
+        return
+    delay_min = delay_min if delay_min is not None else DELAY_BETWEEN_JOINS_MIN
+    delay_max = delay_max if delay_max is not None else DELAY_BETWEEN_JOINS_MAX
+    order = list(chats)
+    random.shuffle(order)
+    for i, c in enumerate(order):
+        link = c.get("link")
+        if not link:
+            continue
+        await _join_one(client, link)
+        if i < len(order) - 1:
+            wait = random.randint(delay_min, delay_max)
+            logger.debug("Waiting %s s before next chat.", wait)
+            await asyncio.sleep(wait)
