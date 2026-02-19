@@ -106,14 +106,21 @@ async def _ensure_tables() -> None:
                 await cur.execute("ALTER TABLE accounts ADD COLUMN api_hash VARCHAR(64) NULL")
             except Exception:
                 pass
+            try:
+                await cur.execute("ALTER TABLE accounts ADD COLUMN humantic_sleep_until DATETIME(6) NULL")
+            except Exception:
+                pass
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS humantic_settings (
                     id INT PRIMARY KEY DEFAULT 1,
                     enabled TINYINT(1) NOT NULL DEFAULT 0,
                     run_interval_hours DECIMAL(4,1) NOT NULL DEFAULT 5,
+                    run_interval_min_hours DECIMAL(4,1) NULL,
+                    run_interval_max_hours DECIMAL(4,1) NULL,
                     leave_after_min_hours DECIMAL(4,1) NOT NULL DEFAULT 2,
                     leave_after_max_hours DECIMAL(4,1) NOT NULL DEFAULT 6,
                     last_run_at DATETIME(6) NULL,
+                    system_sleep_until DATETIME(6) NULL,
                     updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
                     CHECK (id = 1)
                 )
@@ -122,8 +129,23 @@ async def _ensure_tables() -> None:
                 await cur.execute("ALTER TABLE humantic_settings ADD COLUMN last_run_at DATETIME(6) NULL")
             except Exception:
                 pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN system_sleep_until DATETIME(6) NULL")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN run_interval_min_hours DECIMAL(4,1) NULL")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN run_interval_max_hours DECIMAL(4,1) NULL")
+            except Exception:
+                pass
             await cur.execute(
                 "INSERT IGNORE INTO humantic_settings (id, enabled, run_interval_hours, leave_after_min_hours, leave_after_max_hours) VALUES (1, 0, 5, 2, 6)"
+            )
+            await cur.execute(
+                "UPDATE humantic_settings SET run_interval_min_hours = COALESCE(run_interval_min_hours, run_interval_hours), run_interval_max_hours = COALESCE(run_interval_max_hours, run_interval_hours) WHERE id = 1"
             )
     logger.info("Tables ensured")
     await ensure_main_node_if_empty()
@@ -405,18 +427,30 @@ async def get_humantic_settings() -> dict[str, Any]:
         return {
             "enabled": False,
             "run_interval_hours": 5.0,
+            "run_interval_min_hours": 4.0,
+            "run_interval_max_hours": 6.0,
             "leave_after_min_hours": 2.0,
             "leave_after_max_hours": 6.0,
+            "system_sleep_until": None,
         }
-    return dict(row)
+    row = dict(row)
+    # Ensure interval range for dynamic scheduling
+    if row.get("run_interval_min_hours") is None:
+        row["run_interval_min_hours"] = row.get("run_interval_hours") or 4.0
+    if row.get("run_interval_max_hours") is None:
+        row["run_interval_max_hours"] = row.get("run_interval_hours") or 6.0
+    return row
 
 
 async def update_humantic_settings(
     enabled: bool | None = None,
     run_interval_hours: float | None = None,
+    run_interval_min_hours: float | None = None,
+    run_interval_max_hours: float | None = None,
     leave_after_min_hours: float | None = None,
     leave_after_max_hours: float | None = None,
     last_run_at: str | None = None,
+    system_sleep_until: str | None = None,
 ) -> None:
     updates = []
     values = []
@@ -426,6 +460,12 @@ async def update_humantic_settings(
     if run_interval_hours is not None:
         updates.append("run_interval_hours = %s")
         values.append(run_interval_hours)
+    if run_interval_min_hours is not None:
+        updates.append("run_interval_min_hours = %s")
+        values.append(run_interval_min_hours)
+    if run_interval_max_hours is not None:
+        updates.append("run_interval_max_hours = %s")
+        values.append(run_interval_max_hours)
     if leave_after_min_hours is not None:
         updates.append("leave_after_min_hours = %s")
         values.append(leave_after_min_hours)
@@ -435,6 +475,9 @@ async def update_humantic_settings(
     if last_run_at is not None:
         updates.append("last_run_at = %s")
         values.append(last_run_at)
+    if system_sleep_until is not None:
+        updates.append("system_sleep_until = %s")
+        values.append(system_sleep_until)
     if not updates:
         return
     values.append(1)
@@ -443,4 +486,24 @@ async def update_humantic_settings(
             await cur.execute(
                 f"UPDATE humantic_settings SET {', '.join(updates)} WHERE id = %s",
                 values,
+            )
+
+
+async def set_account_humantic_sleep(account_id: int, days: float = 3) -> None:
+    """Put account into deep sleep for humantic (no actions for this account for `days` days)."""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "UPDATE accounts SET humantic_sleep_until = DATE_ADD(NOW(6), INTERVAL %s DAY) WHERE id = %s",
+                (days, account_id),
+            )
+
+
+async def set_system_humantic_sleep(days: float = 1) -> None:
+    """Put entire humantic system into deep sleep; admins should be notified by caller."""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "UPDATE humantic_settings SET system_sleep_until = DATE_ADD(NOW(6), INTERVAL %s DAY) WHERE id = 1",
+                (days,),
             )

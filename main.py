@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import random
 import re
 import sys
 
@@ -67,26 +68,56 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Check every 5 min: if humantic enabled and interval passed, run runner and set last_run_at."""
+    """Check every 5 min: if humantic enabled, not in system sleep, and interval passed, run runner."""
     try:
         from datetime import datetime, timezone
         settings = await db.get_humantic_settings()
         if not settings.get("enabled"):
             return
-        interval_hours = float(settings.get("run_interval_hours") or 5)
-        last = settings.get("last_run_at")
         now = datetime.now(timezone.utc)
+        # System deep sleep (e.g. after server-wide flood)
+        sys_until = settings.get("system_sleep_until")
+        if sys_until:
+            if isinstance(sys_until, str):
+                sys_until = datetime.fromisoformat(sys_until.replace("Z", "+00:00"))
+            if getattr(sys_until, "tzinfo", None) is None:
+                sys_until = sys_until.replace(tzinfo=timezone.utc)
+            if now < sys_until:
+                return
+        # Dynamic interval: random in [min, max] hours
+        min_h = float(settings.get("run_interval_min_hours") or 4)
+        max_h = float(settings.get("run_interval_max_hours") or 6)
+        required_sec = random.uniform(min_h * 3600, max_h * 3600)
+        last = settings.get("last_run_at")
         if last is not None:
             if isinstance(last, str):
                 last = datetime.fromisoformat(last.replace("Z", "+00:00"))
             if getattr(last, "tzinfo", None) is None:
                 last = last.replace(tzinfo=timezone.utc)
-            if (now - last).total_seconds() < interval_hours * 3600:
+            if (now - last).total_seconds() < required_sec:
                 return
         await db.update_humantic_settings(last_run_at=now.strftime("%Y-%m-%d %H:%M:%S"))
         from cli_bots.humantic_actions.runner import run_all_accounts
-        asyncio.create_task(run_all_accounts(main_node_id_only=True, include_leave=True))
-        logger.info("Humantic run started (next in %s h)", interval_hours)
+        from bot.messages import MSG_SYSTEM_SLEEP
+
+        async def on_account_sleep(aid: int):
+            await db.set_account_humantic_sleep(aid, days=3)
+
+        async def on_system_sleep():
+            await db.set_system_humantic_sleep(days=1)
+            for admin_id in await db.list_admin_ids():
+                try:
+                    await context.bot.send_message(chat_id=admin_id, text=MSG_SYSTEM_SLEEP)
+                except Exception:
+                    pass
+
+        asyncio.create_task(run_all_accounts(
+            main_node_id_only=True,
+            include_leave=True,
+            on_account_sleep=on_account_sleep,
+            on_system_sleep=on_system_sleep,
+        ))
+        logger.info("Humantic run started (next in %.1f–%.1f h)", min_h, max_h)
     except Exception as e:
         logger.exception("Humantic job failed: %s", e)
 

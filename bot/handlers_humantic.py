@@ -19,12 +19,14 @@ logger = logging.getLogger(__name__)
 
 def _format_panel(settings: dict) -> str:
     status = "روشن ✅" if settings.get("enabled") else "خاموش ❌"
-    interval = settings.get("run_interval_hours", 5)
+    min_h = settings.get("run_interval_min_hours") or settings.get("run_interval_hours") or 4
+    max_h = settings.get("run_interval_max_hours") or settings.get("run_interval_hours") or 6
+    interval = f"{min_h:.0f}–{max_h:.0f} ساعت"
     leave_min = settings.get("leave_after_min_hours", 2)
     leave_max = settings.get("leave_after_max_hours", 6)
     return MSG_HUMANTIC_PANEL.format(
         status=status,
-        interval=str(interval).replace(".", "/"),
+        interval=interval,
         leave_min=str(leave_min).replace(".", "/"),
         leave_max=str(leave_max).replace(".", "/"),
     )
@@ -66,25 +68,25 @@ async def humantic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             MSG_HUMANTIC_OFF + "\n\n" + _format_panel(await db.get_humantic_settings()),
             reply_markup=humantic_manage_inline(await db.get_humantic_settings()),
         )
-    elif data == "hum_int_1":
-        await db.update_humantic_settings(run_interval_hours=1.0)
+    elif data == "hum_int_4_6":
+        await db.update_humantic_settings(run_interval_min_hours=4.0, run_interval_max_hours=6.0, run_interval_hours=5.0)
         settings = await db.get_humantic_settings()
         await q.edit_message_text(
-            MSG_HUMANTIC_INTERVAL.format(interval="۱") + "\n\n" + _format_panel(settings),
+            MSG_HUMANTIC_INTERVAL.format(interval="۴–۶ ساعت") + "\n\n" + _format_panel(settings),
             reply_markup=humantic_manage_inline(settings),
         )
-    elif data == "hum_int_5":
-        await db.update_humantic_settings(run_interval_hours=5.0)
+    elif data == "hum_int_8_12":
+        await db.update_humantic_settings(run_interval_min_hours=8.0, run_interval_max_hours=12.0, run_interval_hours=10.0)
         settings = await db.get_humantic_settings()
         await q.edit_message_text(
-            MSG_HUMANTIC_INTERVAL.format(interval="۵") + "\n\n" + _format_panel(settings),
+            MSG_HUMANTIC_INTERVAL.format(interval="۸–۱۲ ساعت") + "\n\n" + _format_panel(settings),
             reply_markup=humantic_manage_inline(settings),
         )
-    elif data == "hum_int_6":
-        await db.update_humantic_settings(run_interval_hours=6.0)
+    elif data == "hum_int_24_30":
+        await db.update_humantic_settings(run_interval_min_hours=24.0, run_interval_max_hours=30.0, run_interval_hours=24.0)
         settings = await db.get_humantic_settings()
         await q.edit_message_text(
-            MSG_HUMANTIC_INTERVAL.format(interval="۶") + "\n\n" + _format_panel(settings),
+            MSG_HUMANTIC_INTERVAL.format(interval="۱ روز") + "\n\n" + _format_panel(settings),
             reply_markup=humantic_manage_inline(settings),
         )
     elif data == "hum_leave_1_3":

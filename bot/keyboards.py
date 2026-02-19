@@ -106,21 +106,31 @@ def node_main_no_delete_inline():
 
 # --- Humantic actions (مدیریت رفتار انسانی) ---
 
+# Dynamic interval presets: (min_hours, max_hours, callback_suffix, label)
+HUMANTIC_INTERVAL_PRESETS = [
+    (4, 6, "4_6", "اجرا هر ۴–۶ ساعت"),
+    (8, 12, "8_12", "اجرا هر ۸–۱۲ ساعت"),
+    (24, 30, "24_30", "اجرا هر ۱ روز"),
+]
+
 def humantic_manage_inline(settings: dict):
-    """Inline keyboard for humantic: on/off, interval, leave-after."""
+    """Inline keyboard for humantic: on/off, dynamic interval, leave-after."""
     enabled = settings.get("enabled", False)
-    interval = float(settings.get("run_interval_hours") or 5)
+    min_h = float(settings.get("run_interval_min_hours") or 4)
+    max_h = float(settings.get("run_interval_max_hours") or 6)
     leave_min = float(settings.get("leave_after_min_hours") or 2)
     leave_max = float(settings.get("leave_after_max_hours") or 6)
     row1 = [
         InlineKeyboardButton("✅ روشن" if not enabled else "✅ روشن (فعلی)", callback_data="hum_on"),
         InlineKeyboardButton("❌ خاموش" if enabled else "❌ خاموش (فعلی)", callback_data="hum_off"),
     ]
-    row2 = [
-        InlineKeyboardButton("هر ۱ ساعت" + (" ✓" if interval == 1 else ""), callback_data="hum_int_1"),
-        InlineKeyboardButton("هر ۵ ساعت" + (" ✓" if interval == 5 else ""), callback_data="hum_int_5"),
-        InlineKeyboardButton("هر ۶ ساعت" + (" ✓" if interval == 6 else ""), callback_data="hum_int_6"),
-    ]
+    row2 = []
+    for lo, hi, suffix, label in HUMANTIC_INTERVAL_PRESETS:
+        is_current = abs((min_h - lo) + (max_h - hi)) < 0.1
+        row2.append(InlineKeyboardButton(
+            label + (" ✓" if is_current else ""),
+            callback_data=f"hum_int_{suffix}",
+        ))
     row3 = [
         InlineKeyboardButton("ترک پس از ۱–۳ ساعت", callback_data="hum_leave_1_3"),
         InlineKeyboardButton("ترک پس از ۲–۶ ساعت", callback_data="hum_leave_2_6"),

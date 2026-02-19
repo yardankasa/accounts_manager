@@ -2,11 +2,13 @@
 Humantic actions runner: one interleaved action queue per account (no fixed order).
 Actions: join channel, join chat, send PV, leave channel, leave chat — shuffled randomly.
 If the script crashes, the next run resumes from the last saved action index.
+On flood/PEER_FLOOD: single account → deep sleep 3 days; system-wide → deep sleep 1 day + notify admins.
 """
 import asyncio
 import logging
 import random
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from telethon import TelegramClient
@@ -23,6 +25,30 @@ if str(_APP_ROOT) not in sys.path:
 
 # Resume state uses step "actions" and index = action index in the shuffled list
 RESUME_STEP_ACTIONS = "actions"
+
+# Deep sleep: 3 days for one account, 1 day for whole system
+ACCOUNT_SLEEP_DAYS = 3
+SYSTEM_SLEEP_DAYS = 1
+# If this many accounts hit flood in one run → trigger system sleep
+FLOOD_SYSTEM_SLEEP_THRESHOLD = 2
+
+# Random extra delay (seconds) after a flood to be careful
+FLOOD_COOLDOWN_MIN = 30
+FLOOD_COOLDOWN_MAX = 120
+
+
+def _is_flood_error(exc: BaseException) -> bool:
+    """True if this looks like Telegram flood / too many requests / PEER_FLOOD."""
+    try:
+        from telethon import errors
+        if isinstance(exc, (errors.FloodWaitError, errors.PeerFloodError)):
+            return True
+        if getattr(errors, "FloodError", None) and isinstance(exc, errors.FloodError):
+            return True
+    except Exception:
+        pass
+    msg = str(exc).lower()
+    return any(x in msg for x in ("flood", "peer_flood", "too many requests", "too many attempts", "slowmode"))
 
 
 def _run_id_now() -> str:
@@ -69,13 +95,28 @@ async def run_humantic_for_client(
         on_persist(account_id, "done", 0)
 
 
+def _account_in_sleep(acc: dict) -> bool:
+    """True if account is in humantic deep sleep (skip until sleep_until)."""
+    until = acc.get("humantic_sleep_until")
+    if not until:
+        return False
+    if isinstance(until, str):
+        until = datetime.fromisoformat(until.replace("Z", "+00:00"))
+    if getattr(until, "tzinfo", None) is None:
+        until = until.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) < until
+
+
 async def run_all_accounts(
     main_node_id_only: bool = True,
     include_leave: bool = True,
+    on_account_sleep=None,
+    on_system_sleep=None,
 ) -> None:
     """
     Load accounts from DB and run humantic flow for each, one by one.
-    If a previous run crashed, state is resumed from last action index.
+    Skips accounts in humantic_sleep_until. On flood/PEER_FLOOD: calls on_account_sleep(account_id)
+    for single account (3d sleep), or on_system_sleep() if multiple hit (1d sleep + notify admins).
     """
     from core import db
 
@@ -109,6 +150,8 @@ async def run_all_accounts(
         save_state(run_id, completed_ids, None)
         logger.info("New run %s for %s account(s), interleaved actions (include_leave=%s).", run_id, len(accounts), include_leave)
 
+    flood_count_this_run = 0
+
     def persist(account_id: int, step: str, index: int) -> None:
         if step == "done":
             completed_ids.append(account_id)
@@ -120,6 +163,9 @@ async def run_all_accounts(
     for acc in accounts:
         aid = acc.get("id")
         if aid is None or aid in completed_ids:
+            continue
+        if _account_in_sleep(acc):
+            logger.info("Account id=%s in humantic sleep until %s, skip.", aid, acc.get("humantic_sleep_until"))
             continue
         session_path = acc.get("session_path")
         api_id = acc.get("api_id")
@@ -145,7 +191,26 @@ async def run_all_accounts(
             await run_humantic_for_client(client, aid, run_id, resume, on_persist=persist, include_leave=include_leave)
             logger.info("Humantic: finished for account phone=%s", phone)
         except Exception as e:
-            logger.exception("Humantic failed for account phone=%s: %s", phone, e)
+            if _is_flood_error(e):
+                logger.warning("Flood/PEER_FLOOD for account id=%s phone=%s: %s → deep sleep %s days", aid, phone, e, ACCOUNT_SLEEP_DAYS)
+                if on_account_sleep:
+                    try:
+                        await on_account_sleep(aid)
+                    except Exception as cb_e:
+                        logger.exception("on_account_sleep failed: %s", cb_e)
+                flood_count_this_run += 1
+                cooldown = random.randint(FLOOD_COOLDOWN_MIN, FLOOD_COOLDOWN_MAX)
+                logger.info("Random cooldown %s s after flood.", cooldown)
+                await asyncio.sleep(cooldown)
+                if flood_count_this_run >= FLOOD_SYSTEM_SLEEP_THRESHOLD and on_system_sleep:
+                    logger.warning("Multiple accounts hit flood → system deep sleep %s day + notify admins", SYSTEM_SLEEP_DAYS)
+                    try:
+                        await on_system_sleep()
+                    except Exception as cb_e:
+                        logger.exception("on_system_sleep failed: %s", cb_e)
+                    break
+            else:
+                logger.exception("Humantic failed for account phone=%s: %s", phone, e)
         finally:
             try:
                 await client.disconnect()
