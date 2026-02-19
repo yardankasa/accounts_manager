@@ -141,6 +141,14 @@ async def _ensure_tables() -> None:
                 await cur.execute("ALTER TABLE humantic_settings ADD COLUMN run_interval_max_hours DECIMAL(4,1) NULL")
             except Exception:
                 pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN account_sleep_days DECIMAL(3,1) NOT NULL DEFAULT 3")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN system_sleep_days DECIMAL(3,1) NOT NULL DEFAULT 1")
+            except Exception:
+                pass
             await cur.execute(
                 "INSERT IGNORE INTO humantic_settings (id, enabled, run_interval_hours, leave_after_min_hours, leave_after_max_hours) VALUES (1, 0, 5, 2, 6)"
             )
@@ -431,14 +439,19 @@ async def get_humantic_settings() -> dict[str, Any]:
             "run_interval_max_hours": 6.0,
             "leave_after_min_hours": 2.0,
             "leave_after_max_hours": 6.0,
+            "account_sleep_days": 3.0,
+            "system_sleep_days": 1.0,
             "system_sleep_until": None,
         }
     row = dict(row)
-    # Ensure interval range for dynamic scheduling
     if row.get("run_interval_min_hours") is None:
         row["run_interval_min_hours"] = row.get("run_interval_hours") or 4.0
     if row.get("run_interval_max_hours") is None:
         row["run_interval_max_hours"] = row.get("run_interval_hours") or 6.0
+    if row.get("account_sleep_days") is None:
+        row["account_sleep_days"] = 3.0
+    if row.get("system_sleep_days") is None:
+        row["system_sleep_days"] = 1.0
     return row
 
 
@@ -449,6 +462,8 @@ async def update_humantic_settings(
     run_interval_max_hours: float | None = None,
     leave_after_min_hours: float | None = None,
     leave_after_max_hours: float | None = None,
+    account_sleep_days: float | None = None,
+    system_sleep_days: float | None = None,
     last_run_at: str | None = None,
     system_sleep_until: str | None = None,
 ) -> None:
@@ -472,6 +487,12 @@ async def update_humantic_settings(
     if leave_after_max_hours is not None:
         updates.append("leave_after_max_hours = %s")
         values.append(leave_after_max_hours)
+    if account_sleep_days is not None:
+        updates.append("account_sleep_days = %s")
+        values.append(account_sleep_days)
+    if system_sleep_days is not None:
+        updates.append("system_sleep_days = %s")
+        values.append(system_sleep_days)
     if last_run_at is not None:
         updates.append("last_run_at = %s")
         values.append(last_run_at)

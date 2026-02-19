@@ -112,14 +112,20 @@ HUMANTIC_INTERVAL_PRESETS = [
     (8, 12, "8_12", "اجرا هر ۸–۱۲ ساعت"),
     (24, 30, "24_30", "اجرا هر ۱ روز"),
 ]
+# Account deep sleep (days) when flood: (days, callback_suffix, label)
+HUMANTIC_SLEEP_ACC_PRESETS = [(1, "1", "۱ روز"), (2, "2", "۲ روز"), (3, "3", "۳ روز"), (5, "5", "۵ روز"), (7, "7", "۷ روز")]
+# System deep sleep (days) when flood: (days, callback_suffix, label)
+HUMANTIC_SLEEP_SYS_PRESETS = [(0.5, "0_5", "۱۲ ساعت"), (1, "1", "۱ روز"), (2, "2", "۲ روز"), (3, "3", "۳ روز")]
 
 def humantic_manage_inline(settings: dict):
-    """Inline keyboard for humantic: on/off, dynamic interval, leave-after."""
+    """Inline keyboard for humantic: on/off, interval, leave, account/system sleep days."""
     enabled = settings.get("enabled", False)
     min_h = float(settings.get("run_interval_min_hours") or 4)
     max_h = float(settings.get("run_interval_max_hours") or 6)
     leave_min = float(settings.get("leave_after_min_hours") or 2)
     leave_max = float(settings.get("leave_after_max_hours") or 6)
+    acc_sleep = float(settings.get("account_sleep_days") or 3)
+    sys_sleep = float(settings.get("system_sleep_days") or 1)
     row1 = [
         InlineKeyboardButton("✅ روشن" if not enabled else "✅ روشن (فعلی)", callback_data="hum_on"),
         InlineKeyboardButton("❌ خاموش" if enabled else "❌ خاموش (فعلی)", callback_data="hum_off"),
@@ -135,4 +141,18 @@ def humantic_manage_inline(settings: dict):
         InlineKeyboardButton("ترک پس از ۱–۳ ساعت", callback_data="hum_leave_1_3"),
         InlineKeyboardButton("ترک پس از ۲–۶ ساعت", callback_data="hum_leave_2_6"),
     ]
-    return InlineKeyboardMarkup([row1, row2, row3])
+    row4 = []
+    for days, suffix, label in HUMANTIC_SLEEP_ACC_PRESETS:
+        is_current = abs(acc_sleep - days) < 0.1
+        row4.append(InlineKeyboardButton(
+            f"اکانت {label}" + (" ✓" if is_current else ""),
+            callback_data=f"hum_sleep_acc_{suffix}",
+        ))
+    row5 = []
+    for days, suffix, label in HUMANTIC_SLEEP_SYS_PRESETS:
+        is_current = abs(sys_sleep - days) < 0.1
+        row5.append(InlineKeyboardButton(
+            f"سیستم {label}" + (" ✓" if is_current else ""),
+            callback_data=f"hum_sleep_sys_{suffix}",
+        ))
+    return InlineKeyboardMarkup([row1, row2, row3, row4, row5])

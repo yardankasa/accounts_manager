@@ -101,13 +101,19 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         from bot.messages import MSG_SYSTEM_SLEEP
 
         async def on_account_sleep(aid: int):
-            await db.set_account_humantic_sleep(aid, days=3)
+            s = await db.get_humantic_settings()
+            days = float(s.get("account_sleep_days") or 3)
+            await db.set_account_humantic_sleep(aid, days=days)
 
         async def on_system_sleep():
-            await db.set_system_humantic_sleep(days=1)
+            s = await db.get_humantic_settings()
+            days = float(s.get("system_sleep_days") or 1)
+            await db.set_system_humantic_sleep(days=days)
+            days_label = "۱۲ ساعت" if days == 0.5 else f"{int(days)} روز"
+            msg = MSG_SYSTEM_SLEEP.format(days=days_label)
             for admin_id in await db.list_admin_ids():
                 try:
-                    await context.bot.send_message(chat_id=admin_id, text=MSG_SYSTEM_SLEEP)
+                    await context.bot.send_message(chat_id=admin_id, text=msg)
                 except Exception:
                     pass
 
