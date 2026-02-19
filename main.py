@@ -107,10 +107,9 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         async def on_system_sleep():
             s = await db.get_humantic_settings()
-            days = float(s.get("system_sleep_days") or 1)
-            await db.set_system_humantic_sleep(days=days)
-            days_label = "۱۲ ساعت" if days == 0.5 else f"{int(days)} روز"
-            msg = MSG_SYSTEM_SLEEP.format(days=days_label)
+            hours = float(s.get("system_sleep_hours") or 1)
+            await db.set_system_humantic_sleep(hours=hours)
+            msg = MSG_SYSTEM_SLEEP.format(hours=str(hours).replace(".", "/"))
             for admin_id in await db.list_admin_ids():
                 try:
                     await context.bot.send_message(chat_id=admin_id, text=msg)

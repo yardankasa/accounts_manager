@@ -27,14 +27,14 @@ def _format_panel(settings: dict) -> str:
     leave_min = settings.get("leave_after_min_hours", 2)
     leave_max = settings.get("leave_after_max_hours", 6)
     acc_sleep = settings.get("account_sleep_days", 3)
-    sys_sleep = settings.get("system_sleep_days", 1)
+    sys_sleep_h = settings.get("system_sleep_hours") or 1
     return MSG_HUMANTIC_PANEL.format(
         status=status,
         interval=interval,
         leave_min=str(leave_min).replace(".", "/"),
         leave_max=str(leave_max).replace(".", "/"),
         account_sleep_days=str(acc_sleep).replace(".", "/"),
-        system_sleep_days=str(sys_sleep).replace(".", "/"),
+        system_sleep_hours=str(sys_sleep_h).replace(".", "/"),
     )
 
 
@@ -125,13 +125,12 @@ async def humantic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     elif data.startswith("hum_sleep_sys_"):
         from bot.keyboards import HUMANTIC_SLEEP_SYS_PRESETS
         suffix = data.replace("hum_sleep_sys_", "")
-        for days, s, _ in HUMANTIC_SLEEP_SYS_PRESETS:
+        for hours, s, label in HUMANTIC_SLEEP_SYS_PRESETS:
             if s == suffix:
-                await db.update_humantic_settings(system_sleep_days=days)
+                await db.update_humantic_settings(system_sleep_hours=hours)
                 settings = await db.get_humantic_settings()
-                label = "۱۲ ساعت" if days == 0.5 else "۱" if days == 1 else "۲" if days == 2 else "۳"
                 await q.edit_message_text(
-                    MSG_HUMANTIC_SLEEP_SYS.format(days=label) + "\n\n" + _format_panel(settings),
+                    MSG_HUMANTIC_SLEEP_SYS.format(hours=label) + "\n\n" + _format_panel(settings),
                     reply_markup=humantic_manage_inline(settings),
                 )
                 break
