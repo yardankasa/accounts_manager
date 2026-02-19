@@ -139,10 +139,13 @@ def humantic_manage_inline(settings: dict):
     for lo, hi, suffix, label in HUMANTIC_INTERVAL_PRESETS[2:]:
         is_cur = abs((min_h - lo) + (max_h - hi)) < 0.1
         row_int2.append(InlineKeyboardButton(label + (" ✓" if is_cur else ""), callback_data=f"hum_int_{suffix}"))
-    # Section 3: ترک
+    # Section 3: ترک (leave channels/chats after X hours)
+    leave_min = float(settings.get("leave_after_min_hours") or 2)
+    leave_max = float(settings.get("leave_after_max_hours") or 6)
     row_leave = [
-        InlineKeyboardButton("۱–۳ ساعت", callback_data="hum_leave_1_3"),
-        InlineKeyboardButton("۲–۶ ساعت", callback_data="hum_leave_2_6"),
+        InlineKeyboardButton("۱–۳ س" + (" ✓" if leave_min == 1 and leave_max == 3 else ""), callback_data="hum_leave_1_3"),
+        InlineKeyboardButton("۲–۶ س" + (" ✓" if leave_min == 2 and leave_max == 6 else ""), callback_data="hum_leave_2_6"),
+        InlineKeyboardButton("۲۵ س" + (" ✓" if leave_min == 25 and leave_max == 25 else ""), callback_data="hum_leave_25"),
     ]
     # Section 4: خواب اکانت — 2 then 3 per row
     row_acc1 = []

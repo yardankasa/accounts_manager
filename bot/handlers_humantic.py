@@ -109,6 +109,13 @@ async def humantic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             MSG_HUMANTIC_LEAVE.format(min_h="۲", max_h="۶") + "\n\n" + _format_panel(settings),
             reply_markup=humantic_manage_inline(settings),
         )
+    elif data == "hum_leave_25":
+        await db.update_humantic_settings(leave_after_min_hours=25.0, leave_after_max_hours=25.0)
+        settings = await db.get_humantic_settings()
+        await q.edit_message_text(
+            MSG_HUMANTIC_LEAVE.format(min_h="۲۵", max_h="۲۵") + "\n\n" + _format_panel(settings),
+            reply_markup=humantic_manage_inline(settings),
+        )
     elif data.startswith("hum_sleep_acc_"):
         from bot.keyboards import HUMANTIC_SLEEP_ACC_PRESETS
         suffix = data.replace("hum_sleep_acc_", "")

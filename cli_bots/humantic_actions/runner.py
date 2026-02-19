@@ -16,6 +16,7 @@ from telethon import TelegramClient
 from .actions import build_action_list, run_one_action
 from .config import DELAY_BETWEEN_JOINS_MIN, DELAY_BETWEEN_JOINS_MAX
 from .state import load_state, save_state, clear_state, state_is_recent
+from .. import grand_policy
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,9 @@ async def run_humantic_for_client(
     delay_min, delay_max = DELAY_BETWEEN_JOINS_MIN, DELAY_BETWEEN_JOINS_MAX
     for i in range(start_index, len(action_list)):
         action_type, link = action_list[i]
+        await grand_policy.apply_before_action(account_id)
         await run_one_action(client, action_type, link)
+        grand_policy.record_after_action(account_id)
         if on_persist:
             on_persist(account_id, RESUME_STEP_ACTIONS, i + 1)
         if i < len(action_list) - 1:
@@ -133,6 +136,7 @@ async def run_all_accounts(
         logger.info("No accounts in DB for humantic run.")
         return
 
+    grand_policy.reset_all()
     state = load_state()
     run_id: str
     completed_ids: list[int]
