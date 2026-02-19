@@ -1,6 +1,8 @@
 """Entry point: init DB, bootstrap admins, run bot."""
+import asyncio
 import logging
 import os
+import re
 import sys
 
 # Ensure application root (directory containing main.py) is on path for "core" and "bot"
@@ -40,6 +42,8 @@ from bot.handlers_nodes import (
     node_delete_confirm_callback,
     node_add_conversation_handler,
 )
+from bot.handlers_humantic import humantic_list, humantic_callback
+from bot.keyboards import HUMANTIC_BUTTON
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,31 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
                 )
         except Exception:
             pass
+
+
+async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Check every 5 min: if humantic enabled and interval passed, run runner and set last_run_at."""
+    try:
+        from datetime import datetime, timezone
+        settings = await db.get_humantic_settings()
+        if not settings.get("enabled"):
+            return
+        interval_hours = float(settings.get("run_interval_hours") or 5)
+        last = settings.get("last_run_at")
+        now = datetime.now(timezone.utc)
+        if last is not None:
+            if isinstance(last, str):
+                last = datetime.fromisoformat(last.replace("Z", "+00:00"))
+            if getattr(last, "tzinfo", None) is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if (now - last).total_seconds() < interval_hours * 3600:
+                return
+        await db.update_humantic_settings(last_run_at=now.strftime("%Y-%m-%d %H:%M:%S"))
+        from cli_bots.humantic_actions.runner import run_all_accounts
+        asyncio.create_task(run_all_accounts(main_node_id_only=True, include_leave=True))
+        logger.info("Humantic run started (next in %s h)", interval_hours)
+    except Exception as e:
+        logger.exception("Humantic job failed: %s", e)
 
 
 async def _log_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -85,6 +114,13 @@ def main() -> None:
         await db.init_pool()
         await db.bootstrap_admins_from_env()
         logger.info("DB and admins ready")
+        # Humantic: check every 5 min; run runner when enabled and interval elapsed
+        try:
+            if app.job_queue:
+                app.job_queue.run_repeating(_humantic_job, interval=300, first=60)
+                logger.info("Humantic checker scheduled every 5 min")
+        except Exception as e:
+            logger.warning("Could not schedule humantic job: %s", e)
 
     async def post_shutdown(app: Application) -> None:
         await db.close_pool()
@@ -126,6 +162,8 @@ def main() -> None:
     ))
     app.add_handler(MessageHandler(filters.Regex("^(🖥 مدیریت نودها|مدیریت نودها)$"), nodes_list))
     app.add_handler(MessageHandler(filters.Regex("^(📋 لیست اکانت‌ها|لیست اکانت‌ها)$"), accounts_list))
+    app.add_handler(MessageHandler(filters.Regex(f"^({re.escape(HUMANTIC_BUTTON)})$"), humantic_list))
+    app.add_handler(CallbackQueryHandler(humantic_callback, pattern="^hum_"))
     app.add_handler(node_add_conversation_handler())
     app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_"))
     app.add_handler(CallbackQueryHandler(node_delete_confirm_callback, pattern="^nodedel_"))

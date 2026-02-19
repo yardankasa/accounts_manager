@@ -27,23 +27,24 @@ def _normalize_for_match(s: str) -> str:
     return s
 
 
+# Both accepted as "login" entry (keyboard can show either)
+LOGIN_ENTRY_TEXTS = (LOGIN_BUTTON, "ورود به اکانت")
+
+
 class LoginButtonFilter(filters.MessageFilter):
-    """Match the login button text (e.g. 'Account Loginer') with Unicode normalization."""
+    """Match login entry (e.g. 'Account Loginer' or 'ورود به اکانت') with Unicode normalization so it always works."""
 
     def filter(self, message):
         if not message or not message.text:
             logger.info("[LOGIN_FILTER] no message or no text -> False")
             return False
         norm_msg = _normalize_for_match(message.text)
-        norm_btn = _normalize_for_match(LOGIN_BUTTON)
-        if norm_msg != norm_btn:
-            logger.info(
-                "[LOGIN_FILTER] mismatch -> False: msg %r (len=%s) vs btn %r (len=%s)",
-                message.text, len(message.text), LOGIN_BUTTON, len(LOGIN_BUTTON),
-            )
-            return False
-        logger.info("[LOGIN_FILTER] match -> True (text=%r)", message.text)
-        return True
+        for label in LOGIN_ENTRY_TEXTS:
+            if norm_msg == _normalize_for_match(label):
+                logger.info("[LOGIN_FILTER] match -> True (text=%r)", message.text[:50])
+                return True
+        logger.info("[LOGIN_FILTER] mismatch -> False: msg %r (len=%s)", message.text, len(message.text))
+        return False
 
 
 # Single instance for use in handlers

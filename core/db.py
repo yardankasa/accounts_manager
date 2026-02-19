@@ -106,6 +106,25 @@ async def _ensure_tables() -> None:
                 await cur.execute("ALTER TABLE accounts ADD COLUMN api_hash VARCHAR(64) NULL")
             except Exception:
                 pass
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS humantic_settings (
+                    id INT PRIMARY KEY DEFAULT 1,
+                    enabled TINYINT(1) NOT NULL DEFAULT 0,
+                    run_interval_hours DECIMAL(4,1) NOT NULL DEFAULT 5,
+                    leave_after_min_hours DECIMAL(4,1) NOT NULL DEFAULT 2,
+                    leave_after_max_hours DECIMAL(4,1) NOT NULL DEFAULT 6,
+                    last_run_at DATETIME(6) NULL,
+                    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                    CHECK (id = 1)
+                )
+            """)
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN last_run_at DATETIME(6) NULL")
+            except Exception:
+                pass
+            await cur.execute(
+                "INSERT IGNORE INTO humantic_settings (id, enabled, run_interval_hours, leave_after_min_hours, leave_after_max_hours) VALUES (1, 0, 5, 2, 6)"
+            )
     logger.info("Tables ensured")
     await ensure_main_node_if_empty()
 
@@ -373,3 +392,55 @@ async def get_account(account_id: int) -> dict[str, Any] | None:
                 (account_id,),
             )
             return await cur.fetchone()
+
+
+# --- Humantic settings (singleton) ---
+
+async def get_humantic_settings() -> dict[str, Any]:
+    async with get_conn() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT * FROM humantic_settings WHERE id = 1")
+            row = await cur.fetchone()
+    if not row:
+        return {
+            "enabled": False,
+            "run_interval_hours": 5.0,
+            "leave_after_min_hours": 2.0,
+            "leave_after_max_hours": 6.0,
+        }
+    return dict(row)
+
+
+async def update_humantic_settings(
+    enabled: bool | None = None,
+    run_interval_hours: float | None = None,
+    leave_after_min_hours: float | None = None,
+    leave_after_max_hours: float | None = None,
+    last_run_at: str | None = None,
+) -> None:
+    updates = []
+    values = []
+    if enabled is not None:
+        updates.append("enabled = %s")
+        values.append(1 if enabled else 0)
+    if run_interval_hours is not None:
+        updates.append("run_interval_hours = %s")
+        values.append(run_interval_hours)
+    if leave_after_min_hours is not None:
+        updates.append("leave_after_min_hours = %s")
+        values.append(leave_after_min_hours)
+    if leave_after_max_hours is not None:
+        updates.append("leave_after_max_hours = %s")
+        values.append(leave_after_max_hours)
+    if last_run_at is not None:
+        updates.append("last_run_at = %s")
+        values.append(last_run_at)
+    if not updates:
+        return
+    values.append(1)
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                f"UPDATE humantic_settings SET {', '.join(updates)} WHERE id = %s",
+                values,
+            )

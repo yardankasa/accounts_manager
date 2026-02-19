@@ -9,12 +9,16 @@ BACK_TO_MENU = "🏠 بازگشت به منو"
 # Login button text – use same string for handler matching
 LOGIN_BUTTON = "Account Loginer"
 
+# Humantic actions admin button
+HUMANTIC_BUTTON = "مدیریت رفتار انسانی"
+
 def main_admin_keyboard():
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(LOGIN_BUTTON)],
             [KeyboardButton("🖥 مدیریت نودها")],
             [KeyboardButton("📋 لیست اکانت‌ها")],
+            [KeyboardButton(HUMANTIC_BUTTON)],
             [KeyboardButton(BACK_TO_MENU)],
         ],
         resize_keyboard=True,
@@ -98,3 +102,27 @@ def node_main_no_delete_inline():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("◀️ بازگشت به لیست", callback_data="nodedel_no")],
     ])
+
+
+# --- Humantic actions (مدیریت رفتار انسانی) ---
+
+def humantic_manage_inline(settings: dict):
+    """Inline keyboard for humantic: on/off, interval, leave-after."""
+    enabled = settings.get("enabled", False)
+    interval = float(settings.get("run_interval_hours") or 5)
+    leave_min = float(settings.get("leave_after_min_hours") or 2)
+    leave_max = float(settings.get("leave_after_max_hours") or 6)
+    row1 = [
+        InlineKeyboardButton("✅ روشن" if not enabled else "✅ روشن (فعلی)", callback_data="hum_on"),
+        InlineKeyboardButton("❌ خاموش" if enabled else "❌ خاموش (فعلی)", callback_data="hum_off"),
+    ]
+    row2 = [
+        InlineKeyboardButton("هر ۱ ساعت" + (" ✓" if interval == 1 else ""), callback_data="hum_int_1"),
+        InlineKeyboardButton("هر ۵ ساعت" + (" ✓" if interval == 5 else ""), callback_data="hum_int_5"),
+        InlineKeyboardButton("هر ۶ ساعت" + (" ✓" if interval == 6 else ""), callback_data="hum_int_6"),
+    ]
+    row3 = [
+        InlineKeyboardButton("ترک پس از ۱–۳ ساعت", callback_data="hum_leave_1_3"),
+        InlineKeyboardButton("ترک پس از ۲–۶ ساعت", callback_data="hum_leave_2_6"),
+    ]
+    return InlineKeyboardMarkup([row1, row2, row3])
