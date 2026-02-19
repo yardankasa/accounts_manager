@@ -121,6 +121,7 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             include_leave=True,
             on_account_sleep=on_account_sleep,
             on_system_sleep=on_system_sleep,
+            bot=context.bot,
         ))
         logger.info("Humantic run started (next in %.1f–%.1f h)", min_h, max_h)
     except Exception as e:

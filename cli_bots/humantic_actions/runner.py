@@ -16,6 +16,14 @@ from telethon import TelegramClient
 from .actions import build_action_list, run_one_action
 from .config import DELAY_BETWEEN_JOINS_MIN, DELAY_BETWEEN_JOINS_MAX
 from .state import load_state, save_state, clear_state, state_is_recent
+from .channel_logger import (
+    make_channel_logger,
+    format_run_start,
+    format_run_end,
+    format_account_start,
+    format_account_end,
+    format_action,
+)
 from .. import grand_policy
 
 logger = logging.getLogger(__name__)
@@ -64,10 +72,13 @@ async def run_humantic_for_client(
     resume: dict | None,
     on_persist=None,
     include_leave: bool = True,
+    log_fn=None,
+    phone: str = "",
 ) -> None:
     """
     Run one shuffled action list for this account: join/leave channels, join/leave chats, send PV — random order.
     resume = { "step": "actions", "index": int } to continue from a crash.
+    log_fn: async (text: str) -> None to send full-detail logs to IM_ALIVE_CHANNEL_ID.
     """
     seed = f"{run_id}_{account_id}"
     action_list = build_action_list(seed, include_leave=include_leave)
@@ -86,8 +97,19 @@ async def run_humantic_for_client(
     for i in range(start_index, len(action_list)):
         action_type, link = action_list[i]
         await grand_policy.apply_before_action(account_id)
-        await run_one_action(client, action_type, link)
-        grand_policy.record_after_action(account_id)
+        success, err_msg = True, None
+        try:
+            await run_one_action(client, action_type, link)
+        except Exception as e:
+            success, err_msg = False, str(e)[:200]
+            raise
+        finally:
+            if log_fn:
+                try:
+                    await log_fn(format_action(account_id, phone, action_type, link, success, err_msg))
+                except Exception:
+                    pass
+            grand_policy.record_after_action(account_id)
         if on_persist:
             on_persist(account_id, RESUME_STEP_ACTIONS, i + 1)
         if i < len(action_list) - 1:
@@ -115,11 +137,13 @@ async def run_all_accounts(
     include_leave: bool = True,
     on_account_sleep=None,
     on_system_sleep=None,
+    bot=None,
 ) -> None:
     """
     Load accounts from DB and run humantic flow for each, one by one.
     Skips accounts in humantic_sleep_until. On flood/PEER_FLOOD: calls on_account_sleep(account_id)
     for single account (3d sleep), or on_system_sleep() if multiple hit (1d sleep + notify admins).
+    bot: optional Telegram Bot instance for logging to IM_ALIVE_CHANNEL_ID; if None, one is created from BOT_TOKEN.
     """
     from core import db
 
@@ -136,6 +160,7 @@ async def run_all_accounts(
         logger.info("No accounts in DB for humantic run.")
         return
 
+    log_fn = make_channel_logger(bot)
     grand_policy.reset_all()
     state = load_state()
     run_id: str
@@ -154,7 +179,14 @@ async def run_all_accounts(
         save_state(run_id, completed_ids, None)
         logger.info("New run %s for %s account(s), interleaved actions (include_leave=%s).", run_id, len(accounts), include_leave)
 
+    if log_fn:
+        try:
+            await log_fn(format_run_start(run_id, len(accounts)))
+        except Exception:
+            pass
+
     flood_count_this_run = 0
+    completed_count = 0  # accounts that finished without exception
 
     def persist(account_id: int, step: str, index: int) -> None:
         if step == "done":
@@ -191,8 +223,28 @@ async def run_all_accounts(
                 logger.warning("Account phone=%s not authorized, skip.", phone)
                 await client.disconnect()
                 continue
+            if log_fn:
+                try:
+                    await log_fn(format_account_start(aid, phone))
+                except Exception:
+                    pass
             logger.info("Humantic: starting for account id=%s phone=%s", aid, phone)
-            await run_humantic_for_client(client, aid, run_id, resume, on_persist=persist, include_leave=include_leave)
+            account_ok = True
+            try:
+                await run_humantic_for_client(
+                    client, aid, run_id, resume, on_persist=persist, include_leave=include_leave,
+                    log_fn=log_fn, phone=phone,
+                )
+            except Exception:
+                account_ok = False
+                raise
+            finally:
+                if log_fn:
+                    try:
+                        await log_fn(format_account_end(aid, phone, account_ok))
+                    except Exception:
+                        pass
+            completed_count += 1
             logger.info("Humantic: finished for account phone=%s", phone)
         except Exception as e:
             if _is_flood_error(e):
@@ -221,6 +273,11 @@ async def run_all_accounts(
             except Exception:
                 pass
 
+    if log_fn:
+        try:
+            await log_fn(format_run_end(run_id, completed_count))
+        except Exception:
+            pass
     clear_state()
     logger.info("Humantic: all accounts done.")
 
