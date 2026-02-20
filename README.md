@@ -1,253 +1,297 @@
-# Rezabots — Admin Telegram Login Manager
+# رزابوت‌ها (Rezabots) — راهنمای کامل پروژه
 
-Admin-only Telegram bot to manage Telegram account logins across a **main server** and **SSH nodes**. Each account uses its own API_ID/API_HASH (entered in the bot). Sessions are stored on the main server or on the chosen node. V1: login, account list/delete, node management. V2 (later): use accounts for automation.
-
----
-
-## Prerequisites
-
-- **Python 3.13+**
-- **MySQL 8** (or 5.7)
-- **Telegram Bot Token** ([@BotFather](https://t.me/BotFather))
-- For **nodes**: SSH access (key or password) to remote servers
+بات ادمین تلگرام برای **مدیریت ورود اکانت‌های تلگرام** روی یک سرور اصلی و نودهای SSH. هر اکانت با API_ID/API_HASH خودش (واردشده در بات) کار می‌کند. سشن‌ها روی سرور اصلی یا نود انتخاب‌شده ذخیره می‌شوند. علاوه بر ورود و مدیریت نود/اکانت، قابلیت **رفتار انسانی (Humantic)** برای شبیه‌سازی کاربر عادی (جوین/ترک کانال و گروه، ارسال پیام خصوصی) با تأخیرها و بازه‌های تصادفی وجود دارد.
 
 ---
 
-## Quick Start
+## فهرست
 
-### 1. Clone and enter project
+- [پیش‌نیازها](#پیش‌نیازها)
+- [شروع سریع (اجرای آسان بات)](#شروع-سریع-اجرای-آسان-بات)
+- [ساختار پروژه](#ساختار-پروژه)
+- [نحوه کار بات](#نحوه-کار-بات)
+- [رفتار انسانی (مدیریت رفتار انسانی)](#رفتار-انسانی-مدیریت-رفتار-انسانی)
+- [معماری و جریان ورود](#معماری-و-جریان-ورود)
+- [محدودیت‌ها و قوانین](#محدودیت‌ها-و-قوانین)
+- [هشدارها و نکات امنیتی](#هشدارها-و-نکات-امنیتی)
+- [عیب‌یابی](#عیب‌یابی)
+
+---
+
+## پیش‌نیازها
+
+| مورد | نسخه / توضیح |
+|------|----------------|
+| **Python** | ۳.۱۳ یا بالاتر |
+| **MySQL** | ۸ یا ۵.۷ |
+| **توکن بات** | از [@BotFather](https://t.me/BotFather) |
+| **نودهای دیگر** | دسترسی SSH (کلید یا پسورد) به سرورهای دیگر |
+
+---
+
+## شروع سریع (اجرای آسان بات)
+
+### ۱. ورود به پوشه پروژه
 
 ```bash
-cd /path/to/rezabots
+cd /path/to/rezabots/src
 ```
 
-The app runs from the **`src`** directory; `.env` is read from the **project root** (parent of `src`).
+تمام دستورات زیر از داخل همین پوشه `src` اجرا می‌شوند (جایی که `main.py` و پوشه‌های `core` و `bot` هستند).
 
-### 2. Virtual environment and dependencies
+### ۲. محیط مجازی و نصب وابستگی‌ها
 
 ```bash
-cd src
 python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # لینوکس/مک
+# در ویندوز: .venv\Scripts\activate
+
 pip install -e .
-# or: pip install python-telegram-bot ">=21" telethon python-dotenv aiomysql asyncssh
 ```
 
-### 3. MySQL
+### ۳. راه‌اندازی MySQL
 
-From **project root** (parent of `src`):
+از **ریشه پروژه** (یک سطح بالاتر از `src`):
 
 ```bash
-cd ..   # back to project root
+cd ..   # برگشت به ریشه پروژه
 ./scripts/install_mysql.sh
 ```
 
-This installs MySQL (Debian/Ubuntu), creates DB `rezabots`, user `rezabots`, and appends `MYSQL_*` to `.env`. Optional: set `MYSQL_APP_PASSWORD=yourpass` before running to use your own password.
+این اسکریپت در دبیان/اوبونتو MySQL را نصب می‌کند، دیتابیس `rezabots` و کاربر `rezabots` را می‌سازد و متغیرهای `MYSQL_*` را به `.env` اضافه می‌کند. در صورت تمایل قبل از اجرا می‌توانید `MYSQL_APP_PASSWORD=پسوردخود` تنظیم کنید.
 
-### 4. Environment (`.env`)
+### ۴. تنظیم محیط (فایل `.env`)
 
-Copy the example and edit at **project root**:
+فایل `.env` باید در **همان پوشه‌ای که `main.py` است** (یعنی `src`) قرار بگیرد:
 
 ```bash
+cd /path/to/rezabots/src
 cp .env.example .env
 ```
 
-Edit `.env`:
+سپس `.env` را ویرایش کنید:
 
-| Variable       | Required | Description |
-|----------------|----------|-------------|
-| `BOT_TOKEN`    | Yes      | From [@BotFather](https://t.me/BotFather) |
-| `ADMIN_IDS`    | Yes      | Comma-separated Telegram user IDs (e.g. `123456789`) |
-| `MYSQL_*`      | Yes      | Set by `scripts/install_mysql.sh` or manually |
+| متغیر | اجباری | توضیح |
+|--------|--------|--------|
+| `BOT_TOKEN` | بله | توکن بات از [@BotFather](https://t.me/BotFather) |
+| `ADMIN_IDS` | بله | شناسه عددی تلگرام ادمین‌ها با کاما (مثلاً `123456789,987654321`) |
+| `MYSQL_HOST` | بله | معمولاً `127.0.0.1` |
+| `MYSQL_PORT` | بله | معمولاً `3306` |
+| `MYSQL_USER` | بله | معمولاً `rezabots` |
+| `MYSQL_PASSWORD` | بله | پسورد MySQL |
+| `MYSQL_DATABASE` | بله | معمولاً `rezabots` |
+| `BOT_USERNAME` | خیر | نام بات بدون @ (برای im_alive) |
+| `IM_ALIVE_CHANNEL_ID` | خیر | شناسه عددی کانال برای لاگ زنده بودن و رفتار انسانی (بات باید ادمین کانال باشد) |
+| `PROXY_URL` | خیر | در صورت نیاز پروکسی، مثلاً `socks5://127.0.0.1:10808` |
 
-**API_ID / API_HASH** are **not** read from `.env`. Admins enter them **per login** in the bot for each account.
+**API_ID و API_HASH** از `.env` خوانده نمی‌شوند؛ ادمین در بات برای هر ورود آن‌ها را وارد می‌کند.
 
-### 5. Run the bot
+### ۵. اجرای بات (دستور نهایی)
 
-From **`src`** (so that `core` and `bot` resolve):
+همیشه از داخل پوشه `src` و با فعال بودن venv:
 
 ```bash
-cd src
+cd /path/to/rezabots/src
 source .venv/bin/activate
 python main.py
 ```
 
-Or from project root with `PYTHONPATH`:
+یا با اسکریپت نصب‌شده از `pyproject.toml`:
 
 ```bash
+cd /path/to/rezabots/src
+source .venv/bin/activate
+rezabots
+```
+
+یا از ریشه پروژه با تنظیم مسیر پایتون:
+
+```bash
+cd /path/to/rezabots
 PYTHONPATH=src src/.venv/bin/python src/main.py
 ```
 
-On startup the app: creates `data/session` and `logs`, initialises the DB pool, creates tables and the **main node** if missing, and seeds **admins** from `ADMIN_IDS`. Then it starts polling.
+با اجرای موفق، بات جدول‌ها و نود اصلی را در دیتابیس ایجاد می‌کند، ادمین‌ها را از `ADMIN_IDS` پر می‌کند و شروع به polling می‌کند. مسیر فایل لاگ در خروجی چاپ می‌شود (مثلاً `logs/bot_errors.log`).
 
-### 6. Use the bot
+### ۶. استفاده از بات
 
-1. Send **`/admin`** to your bot.
-2. If your Telegram user ID is in `ADMIN_IDS`, you get the panel (ورود به اکانت, مدیریت نودها, لیست اکانت‌ها).
-3. **Login flow**: ورود به اکانت → choose node → enter **API_ID** → **API_HASH** → phone → code (and 2FA if needed). Sessions are stored on the chosen node (main = local `data/session`, others = path on that server).
+1. به بات **`/admin`** بفرستید.
+2. اگر شناسه شما در `ADMIN_IDS` باشد، پنل ادمین نمایش داده می‌شود.
+3. **ورود اکانت:** از منو «ورود به اکانت» → انتخاب نود → وارد کردن **API_ID** → **API_HASH** → شماره تلفن → کد تأیید (و در صورت فعال بودن، رمز دو مرحله‌ای). سشن روی نود انتخاب‌شده ذخیره می‌شود.
 
-### Humantic actions (v1)
+---
 
-Simulate a normal user to reduce ban risk: join channels/chats and send one PM to PV links from `data/links_pool/`, with calm random delays. Runs **per account**, one account after another, reading accounts from DB (main node only in v1).
+## ساختار پروژه (زیر `src/`)
 
-**Run from `src`:**
+| مسیر | کاربرد |
+|------|--------|
+| `main.py` | نقطه ورود: لاگ، اتصال DB، ثبت هندلرها و job رفتار انسانی، `run_polling()` |
+| `core/config.py` | خواندن `.env`، BOT_TOKEN، MYSQL_*، مسیرها |
+| `core/db.py` | اتصال MySQL، جداول، admins/nodes/accounts/login_events، تنظیمات و خواب رفتار انسانی |
+| `core/limits.py` | محدودیت تعداد ورود در روز و فاصله بین ورودها |
+| `core/node_runner.py` | اجرای ورود روی نود اصلی (Telethon) یا نود دور (SSH + اسکریپت) |
+| `core/telethon_login.py` | ورود Telethon روی سرور اصلی |
+| `bot/handlers_admin.py` | `/admin`، بازگشت/انصراف |
+| `bot/handlers_login.py` | مکالمه ورود: نود → API_ID → API_HASH → تلفن → کد → 2FA |
+| `bot/handlers_accounts.py` | لیست اکانت‌ها، حذف، وضعیت، im_alive |
+| `bot/handlers_nodes.py` | لیست نودها، افزودن/حذف نود |
+| `bot/handlers_humantic.py` | پنل «مدیریت رفتار انسانی» و callback دکمه‌ها |
+| `bot/keyboards.py` | کیبوردهای فارسی |
+| `bot/messages.py` | متن‌های کاربری فارسی |
+| `bot/filters.py` | `ensure_admin()` |
+| `cli_bots/humantic_actions/` | رانر رفتار انسانی، اکشن‌ها، state، لاگ کانال |
+| `cli_bots/grand_policy.py` | سیاست کلی: فاصله تصادفی بین اکشن هر اکانت |
+| `data/links_pool/` | `channels.json`, `chats.json`, `pv.json` برای لینک‌های جوین/ترک/پیوی |
+| `data/session/` | سشن‌های نود اصلی |
+| `data/humantic_state.json` | وضعیت توقف/ادامه اجرای رفتار انسانی |
+| `logs/` | لاگ بات |
+
+---
+
+## نحوه کار بات
+
+- **ورود:** فقط کاربرانی که شناسه آن‌ها در جدول `admins` است (از `ADMIN_IDS` پر می‌شود) به پنل `/admin` دسترسی دارند.
+- **ورود اکانت:** انتخاب نود → API_ID و API_HASH و شماره تلفن → کد و در صورت نیاز 2FA. پس از موفقیت، رکورد در `accounts` و `login_events` ثبت و سشن روی همان نود ذخیره می‌شود.
+- **نود اصلی:** به‌صورت خودکار ساخته می‌شود؛ سشن‌ها در `data/session/` روی همان سرور هستند.
+- **نودهای دیگر:** از منو «مدیریت نودها» با نام، host، پورت، کاربر SSH و مسیر سشن روی نود اضافه می‌شوند. اسکریپت ورود از طریق SSH روی نود اجرا می‌شود.
+
+---
+
+## رفتار انسانی (مدیریت رفتار انسانی)
+
+این بخش برای **شبیه‌سازی کاربر عادی** است تا ریسک محدودیت/بن کاهش یابد: جوین و ترک کانال/گروه و ارسال یک پیام به لینک‌های PV، با **بازه‌های تصادفی** و بدون اینکه همه اکانت‌ها در یک زمان مشخص یک کار را انجام دهند.
+
+### تنظیمات (همه به صورت بازه x تا n)
+
+- **فاصله اجرا:** هر چند ساعت یک بار اجرا (مثلاً ۴–۶، ۸–۱۲، ۲۴–۳۰ ساعت؛ مقدار واقعی هر بار تصادفی در بازه).
+- **ترک کانال/گروه:** پس از چند ساعت ترک شود (مثلاً ۱–۳، ۲–۶، ۲۵–۳۰ ساعت).
+- **خواب اکانت (فلو):** اگر یک اکانت فلو/محدودیت بخورد، چند روز در خواب (بازه مثلاً ۳–۵ روز).
+- **خواب سیستم (فلو):** اگر چند اکانت در یک اجرا فلو بخورند، کل سیستم چند ساعت در خواب (بازه مثلاً ۰.۵–۲ ساعت).
+
+همه زمان‌ها به صورت **بازه (min–max)** و **تصادفی** اعمال می‌شوند تا هیچ‌وقت همه در یک زمان ثابت جوین/ترک/پیام نزنند.
+
+### روش اجرا
+
+- **از طریق بات:** در پنل ادمین دکمه «مدیریت رفتار انسانی» → روشن کردن و انتخاب بازه‌ها. یک job هر ۵ دقیقه چک می‌کند؛ اگر رفتار انسانی روشن باشد و زمان بازه گذشته باشد، یک بار `run_all_accounts` اجرا می‌شود.
+- **از طریق CLI (دستی):**
 
 ```bash
-cd src
+cd /path/to/rezabots/src
+source .venv/bin/activate
 python -m cli_bots.humantic_actions
 ```
 
-Flow for each account: **join channels** (random order) → wait → **join chats** (random order) → wait → **send PV** (one message per link). Then the next account. All steps use safe delays (see `cli_bots/humantic_actions/config.py`). Links are read from `data/links_pool/channels.json`, `chats.json`, `pv.json`. Accounts must have `api_id` and `api_hash` set (from login).
+این دستور فقط اکانت‌های **نود اصلی** را از DB می‌خواند و به‌صورت یکی‌یکی برای هر اکانت لیست اکشن‌ها (جوین کانال، جوین چت، پیوی، ترک کانال، ترک چت) را به‌صورت **ترتیب تصادفی** (با seed ثابت برای هر run) اجرا می‌کند. بین هر اکشن یک تأخیر تصادفی (مثلاً ۱۵–۴۵ ثانیه) و طبق grand policy یک فاصله تصادفی per-account (۰.۸–۱.۵ ثانیه) رعایت می‌شود.
 
-**Resume after crash:** If the script stops (kill, crash, etc.), run it again: it will **continue** from the last saved position (no re-joining channels/chats, no duplicate PV). State is stored in `data/humantic_state.json` and is only used for runs started within the last 2 hours.
+### لینک‌ها و state
+
+- لینک‌ها از `data/links_pool/channels.json`, `chats.json`, `pv.json` خوانده می‌شوند.
+- وضعیت اجرا در `data/humantic_state.json` ذخیره می‌شود. اگر اسکریپت قطع شود، اجرای بعدی از همان نقطه ادامه می‌دهد (بدون جوین/پیوی تکراری). state فقط برای runهای شروع‌شده در ۲ ساعت گذشته معتبر است.
+- اگر `IM_ALIVE_CHANNEL_ID` و `BOT_TOKEN` تنظیم شده باشند، خلاصه هر run و هر اکانت و هر اکشن به آن کانال با بات ارسال می‌شود.
+
+### فلو و خواب
+
+- اگر فقط **یک اکانت** فلو/PEER_FLOOD بگیرد → آن اکانت برای یک مدت تصادفی در بازه «خواب اکانت» (مثلاً ۳–۵ روز) از اجرا حذف می‌شود.
+- اگر **چند اکانت** در همان run فلو بگیرند → «خواب سیستم» فعال می‌شود (مدت تصادفی در بازه، مثلاً ۰.۵–۲ ساعت) و به ادمین‌ها اطلاع داده می‌شود.
 
 ---
 
-## Architecture
+## معماری و جریان ورود
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Main Server                                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
-│  │  Admin Bot   │  │  Core        │  │  MySQL               │   │
-│  │  (ptb v21)   │──│  DB, limits, │──│  admins, nodes,       │   │
-│  │  Persian UI  │  │  node_runner,│  │  accounts,            │   │
-│  │              │  │  telethon_   │  │  login_events         │   │
-│  │              │  │  login       │  │                        │   │
-│  └──────┬───────┘  └──────┬───────┘  └──────────────────────┘   │
-│         │                 │                                      │
-│         │                 │  SSH (when node is remote)            │
-│         │                 │  Upload scripts/login_worker.py,    │
-│         │                 │  run with env API_ID, API_HASH,      │
-│         │                 │  bridge stdin (code/2FA) ↔ bot       │
-└─────────┼─────────────────┼──────────────────────────────────────┘
+│  سرور اصلی                                                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐     │
+│  │  بات ادمین   │  │  Core        │  │  MySQL               │     │
+│  │  (ptb v21)   │──│  DB, limits, │──│  admins, nodes,       │     │
+│  │  منوی فارسی  │  │  node_runner,│  │  accounts,            │     │
+│  │  + رفتار     │  │  telethon_   │  │  humantic_settings    │     │
+│  │  انسانی     │  │  login       │  │  login_events         │     │
+│  └──────┬───────┘  └──────┬───────┘  └──────────────────────┘     │
+│         │                 │                                        │
+│         │                 │  SSH (برای نود دور)                   │
+│         │                 │  آپلود اسکریپت ورود، اجرا با env      │
+└─────────┼─────────────────┼────────────────────────────────────────┘
           │                 │
           ▼                 ▼
     ┌───────────┐    ┌─────────────────────────────────────────────┐
-    │  Admins   │    │  Nodes (optional)                           │
-    │  Telegram │    │  SSH server: run Telethon login script,      │
-    │  clients  │    │  sessions under node’s session_base_path    │
+    │  ادمین‌ها  │    │  نودها (اختیاری)                            │
+    │  تلگرام   │    │  سرور SSH: اجرای اسکریپت ورود، سشن در مسیر  │
     └───────────┘    └─────────────────────────────────────────────┘
 ```
 
-- **Bot**: Entry `/admin`, then menu (ورود به اکانت, مدیریت نودها, لیست اکانت‌ها). All handlers check `admins` table; only whitelisted users proceed.
-- **Core**:
-  - **db**: MySQL pool, tables, admins/nodes/accounts/login_events, and **rate limits** (3 logins per node per 24h, 4h between logins on same node).
-  - **limits**: `can_login_on_node()`, `remaining_logins_today()`.
-  - **node_runner**: For **main node** → run Telethon in-process (`telethon_login`). For **other nodes** → SSH, upload `login_worker.py`, run it with user-provided API_ID/API_HASH/phone/session path, bridge code/2FA via stdin.
-  - **telethon_login**: Telethon login on main server (code + optional 2FA), using per-account API_ID/API_HASH.
-- **Login flow**: Choose node → API_ID → API_HASH → phone → code (and 2FA if needed). Success → insert into `accounts` and `login_events`, store session on main or node.
+---
+
+## محدودیت‌ها و قوانین
+
+- **ورود:** حداکثر **۳ بار ورود در ۲۴ ساعت** به ازای هر نود؛ حداقل **۴ ساعت** بین دو ورود روی **همان نود**.
+- **مکالمه ورود:** فقط یک مکالمه ورود فعال به ازای هر کاربر؛ کد اشتباه با پیام واضح نمایش داده می‌شود و مرحله کد تکرار می‌شود.
+- **رفتار انسانی:** فقط اکانت‌های **نود اصلی** در نسخه فعلی در اجرای خودکار/CLI استفاده می‌شوند. اکانت‌ها باید `api_id` و `api_hash` داشته باشند (از زمان ورود در بات ست می‌شوند).
+- **Grand policy:** بین هر اکشن هر اکانت یک فاصله تصادفی (۰.۸–۱.۵ ثانیه) رعایت می‌شود تا همه با هم در یک ثانیه اکشن نزنند.
+- **تأخیر بین جوین/مراحل:** در بازه‌های ثابت در `cli_bots/humantic_actions/config.py` (مثلاً ۱۵–۴۵ ثانیه بین جوین‌ها).
 
 ---
 
-## Project Structure (under `src/`)
+## هشدارها و نکات امنیتی
 
-| Path | Purpose |
-|------|--------|
-| `main.py` | Entry: logging, DB init, bootstrap admins, register handlers, `run_polling()` |
-| `core/config.py` | Load `.env` from project root; BOT_TOKEN, MYSQL_*, paths |
-| `core/db.py` | MySQL pool, tables, CRUD for admins/nodes/accounts/login_events, limit checks |
-| `core/limits.py` | Wrappers for login limits per node |
-| `core/node_runner.py` | Node health check; run login on main (Telethon) or remote (SSH + worker) |
-| `core/telethon_login.py` | Telethon login on main (api_id/api_hash from user) |
-| `bot/handlers_admin.py` | `/admin`, بازگشت/انصراف |
-| `bot/handlers_login.py` | Conversation: node → API_ID → API_HASH → phone → code → 2FA |
-| `bot/handlers_accounts.py` | List accounts, delete (incl. session file on main) |
-| `bot/handlers_nodes.py` | List nodes, add node (SSH), delete node |
-| `bot/keyboards.py` | Persian reply/inline keyboards |
-| `bot/messages.py` | Persian user-facing strings |
-| `bot/filters.py` | `ensure_admin(update, context)` |
-| `bot/logging_utils.py` | File + stdout logging |
-| `scripts/login_worker.py` | Telethon script for **nodes**: reads env (API_ID, API_HASH, phone, session path), stdin = code/2FA, stdout = NEED_CODE/NEED_2FA/OK/ERROR |
-| `cli_bots/humantic_actions/` | **Humantic v1**: read accounts from DB (main node), join channels/chats and send PV from `data/links_pool/` with calm delays; run via `python -m cli_bots.humantic_actions` |
-| `data/links_pool/` | JSON pools: `channels.json`, `chats.json`, `pv.json` (links used by humantic actions) |
-
-Data at **project root**: `.env`, `data/session/` (main node sessions), `data/links_pool/` (channel/chat/PV links), `logs/` (e.g. `bot_errors.log`).
+1. **توکن و شناسه ادمین:** `BOT_TOKEN` و `ADMIN_IDS` را در `.env` قرار دهید و `.env` را در git کامیت نکنید.
+2. **دیتابیس:** پسورد MySQL را قوی نگه دارید و دسترسی دیتابیس را به شبکه‌های غیرضروری محدود کنید.
+3. **تلگرام:** استفاده بیش از حد از API (ورودهای پشت‌سرهم، جوین/ترک انبوه) می‌تواند به محدودیت موقت یا مسدودی منجر شود. رفتار انسانی با بازه‌های تصادفی و تأخیر برای کاهش این ریسک طراحی شده، اما تضمینی وجود ندارد.
+4. **فلو/PEER_FLOOD:** در صورت فلو، اکانت یا کل سیستم طبق تنظیمات پنل به‌صورت خودکار به خواب می‌روند؛ پس از خواب دوباره اجرا از سر گرفته می‌شود.
+5. **پروکسی:** در محیط‌هایی که به API تلگرام دسترسی مستقیم ندارید، از `PROXY_URL` (مثلاً socks5) استفاده کنید.
+6. **لاگ:** لاگ‌ها ممکن است حاوی شناسه چت، شماره (مختصر) و لینک‌ها باشند؛ مسیر لاگ و دسترسی به سرور را محدود کنید.
 
 ---
 
-## Limits and Rules
+## عیب‌یابی
 
-- **3 logins per node per 24 hours** (enforced via `login_events`).
-- **4 hours** minimum between two logins on the **same node**.
-- One active login conversation per user; wrong code gives a clear message and stays on code step (no brute force).
-- UI: Persian, normal reply keyboards; inline only where it helps (e.g. node choice with remaining count).
+### پیدا کردن شناسه کاربر تلگرام
 
----
+به [@userinfobot](https://t.me/userinfobot) پیام بفرستید یا موقتاً در بات `print(update.effective_user.id)` قرار دهید و `/admin` بفرستید. عدد را در `ADMIN_IDS` در `.env` قرار دهید.
 
-## Useful Tips
+### ساخت بات و دریافت BOT_TOKEN
 
-### Get your Telegram user ID
+از [@BotFather](https://t.me/BotFather) بات بسازید و توکن را در `BOT_TOKEN` قرار دهید.
 
-Send a message to [@userinfobot](https://t.me/userinfobot) or add a temporary `print(update.effective_user.id)` in the bot and send `/admin`. Put that number in `ADMIN_IDS` in `.env`.
+### API_ID و API_HASH (برای هر اکانت)
 
-### Create a bot and get BOT_TOKEN
+از [my.telegram.org](https://my.telegram.org) یک اپلیکیشن بسازید و API ID و API Hash بگیرید. ادمین در بات هنگام شروع ورود (بعد از انتخاب نود) آن‌ها را وارد می‌کند.
 
-Talk to [@BotFather](https://t.me/BotFather), create a bot, copy the token into `BOT_TOKEN`.
+### بات به `/admin` جواب نمی‌دهد
 
-### API_ID and API_HASH (per account)
+- `BOT_TOKEN` و اجرا بودن پروسه را چک کنید.
+- مطمئن شوید شناسه شما در `ADMIN_IDS` (با کاما، بدون فاصله اضافه در صورت تمایل) است.
+- `logs/bot_errors.log` و خروجی ترمینال را برای خطا (مثلاً اتصال DB) ببینید.
 
-From [my.telegram.org](https://my.telegram.org): create an application and get API ID and API Hash. **Each account can use a different app**; the admin enters them in the bot when starting a login (after choosing the node).
+### TimedOut / «اتصال به تلگرام برقرار نشد»
 
-### Main node vs remote nodes
+در صورت timeout یا قطع شبکه، بات پیام کوتاه فارسی می‌فرستد. اگر مدام timeout می‌گیرید، احتمالاً فایروال یا مسدودیت است؛ از پروکسی (مثلاً `PROXY_URL` یا `HTTPS_PROXY`) استفاده کنید. برای SOCKS5 پکیج با socks نصب شده است (`python-telegram-bot[socks]`).
 
-- **Main node**: Created automatically on first run. Sessions go to `data/session/` on the main server. No SSH.
-- **Remote nodes**: Add via “مدیریت نودها” → “افزودن نود جدید”. You need: name, host, port, SSH user, and either **key path** (e.g. `/home/you/.ssh/id_rsa`) or **password**. Session path on node (e.g. `/opt/rezabots/data/session`) must exist or be creatable. The main server uploads `scripts/login_worker.py` and runs it there with env vars; no need to install the full app on the node, only Python 3 + Telethon.
-
-### Running the login worker on a node by hand
-
-For debugging on a node:
+### اجرای دستی رفتار انسانی
 
 ```bash
-export API_ID=... API_HASH=... TELEGRAM_PHONE=... SESSION_BASE=/path/to/sessions
-python3 -u /path/to/login_worker.py
-# Then type code and 2FA when it prints NEED_CODE / NEED_2FA
+cd /path/to/rezabots/src
+source .venv/bin/activate
+python -m cli_bots.humantic_actions
 ```
 
-### Logs and errors
+اگر لینکی در `data/links_pool/` نباشد یا اکانتی سشن/API نداشته باشد، آن قسمت در لاگ skip می‌شود.
 
-- **Log file**: under **project root**: `logs/bot_errors.log`. Same output goes to stdout. On startup the app prints the full path (e.g. `Log file: /path/to/rezabots/logs/bot_errors.log`).
-- For debugging “ورود به اکانت”: every incoming message is logged at DEBUG (`MSG chat_id=… text=…`), and when the login flow is entered you’ll see `login_entry called text=…`. If you see the MSG line but not `login_entry called`, the entry-point filter didn’t match.
-- Errors are logged with full detail; the user only sees a short Persian message.
+### ریست دیتابیس
 
-### Database
-
-- Tables are created on first run (`init_pool()`). To reset: drop DB and run again, or truncate tables (main node row is re-created if `nodes` is empty).
-- Main node: `is_main = 1`, `ssh_host`/`ssh_user` NULL, `session_base_path` = main server’s session dir.
-
-### If the bot doesn’t respond to `/admin`
-
-- Check `BOT_TOKEN` and that the process is running.
-- Ensure your Telegram user ID is in `ADMIN_IDS` (comma-separated, no spaces if you prefer).
-- Check `logs/bot_errors.log` and stdout for exceptions (e.g. DB connection).
-
-### TimedOut / “اتصال به تلگرام برقرار نشد”
-
-If you see `telegram.error.TimedOut` or `httpx.ConnectTimeout` at each step, the server cannot reach Telegram’s API in time (firewall, latency, or blocking).
-
-- The app uses **30s** connect/read/write timeouts and sends a short Persian message to the user on timeout.
-- If it still times out: set a **proxy** (e.g. where Telegram is blocked). The library uses `HTTPS_PROXY` or `HTTP_PROXY` from the environment. Example: `export HTTPS_PROXY=http://user:pass@host:port` before running the bot. For SOCKS5, install `python-telegram-bot[socks]` and use `HTTPS_PROXY=socks5://...`.
+جداول در اولین اجرا ساخته می‌شوند. برای ریست می‌توانید دیتابیس را drop و دوباره اجرا کنید یا جداول را خالی کنید؛ در صورت خالی بودن `nodes`، نود اصلی دوباره ساخته می‌شود.
 
 ---
 
-## Summary
+## خلاصه دستورات (اجرای آسان)
 
-| Step | Where | Command / action |
-|------|--------|-------------------|
-| Deps | `src` | `pip install -e .` (or install deps by hand) |
-| MySQL | project root | `./scripts/install_mysql.sh` |
-| Env | project root | `cp .env.example .env`, set `BOT_TOKEN`, `ADMIN_IDS` |
-| Run | `src` | `python main.py` (with venv activated) |
-| Use | Telegram | Send `/admin`, then use the Persian menu |
+| مرحله | محل | دستور / کار |
+|--------|-----|-------------|
+| وابستگی‌ها | `src` | `pip install -e .` |
+| MySQL | ریشه پروژه | `./scripts/install_mysql.sh` |
+| محیط | `src` | `cp .env.example .env` و تنظیم `BOT_TOKEN`, `ADMIN_IDS`, `MYSQL_*` |
+| اجرای بات | `src` | `source .venv/bin/activate` سپس `python main.py` یا `rezabots` |
+| رفتار انسانی (دستی) | `src` | `python -m cli_bots.humantic_actions` |
+| استفاده | تلگرام | ارسال `/admin` و استفاده از منوی فارسی |
 
-API_ID and API_HASH are **always entered in the bot** for each login, not taken from `.env`.
-
-
-
-
----
-## Local Dev
-
-```bash
-export PYTHONPATH="/home/mahdi/Projects/rezabots/src:$PYTHONPATH"
-```
+API_ID و API_HASH همیشه در بات و برای هر بار ورود توسط ادمین وارد می‌شوند، نه از طریق `.env`.
