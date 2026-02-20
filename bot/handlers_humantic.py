@@ -26,15 +26,17 @@ def _format_panel(settings: dict) -> str:
     interval = f"{min_h:.0f}–{max_h:.0f} ساعت"
     leave_min = settings.get("leave_after_min_hours", 2)
     leave_max = settings.get("leave_after_max_hours", 6)
-    acc_sleep = settings.get("account_sleep_days", 3)
-    sys_sleep_h = settings.get("system_sleep_hours") or 1
+    acc_sleep_min = settings.get("account_sleep_min_days") or settings.get("account_sleep_days") or 3
+    acc_sleep_max = settings.get("account_sleep_max_days") or settings.get("account_sleep_days") or 5
+    sys_sleep_min = settings.get("system_sleep_min_hours") or settings.get("system_sleep_hours") or 0.5
+    sys_sleep_max = settings.get("system_sleep_max_hours") or settings.get("system_sleep_hours") or 2.0
     return MSG_HUMANTIC_PANEL.format(
         status=status,
         interval=interval,
         leave_min=str(leave_min).replace(".", "/"),
         leave_max=str(leave_max).replace(".", "/"),
-        account_sleep_days=str(acc_sleep).replace(".", "/"),
-        system_sleep_hours=str(sys_sleep_h).replace(".", "/"),
+        account_sleep_days=f"{acc_sleep_min:.0f}–{acc_sleep_max:.0f}",
+        system_sleep_hours=f"{sys_sleep_min:.1f}–{sys_sleep_max:.1f}".replace(".", "/"),
     )
 
 
@@ -109,21 +111,24 @@ async def humantic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             MSG_HUMANTIC_LEAVE.format(min_h="۲", max_h="۶") + "\n\n" + _format_panel(settings),
             reply_markup=humantic_manage_inline(settings),
         )
-    elif data == "hum_leave_25":
-        await db.update_humantic_settings(leave_after_min_hours=25.0, leave_after_max_hours=25.0)
+    elif data == "hum_leave_25_30":
+        await db.update_humantic_settings(leave_after_min_hours=25.0, leave_after_max_hours=30.0)
         settings = await db.get_humantic_settings()
         await q.edit_message_text(
-            MSG_HUMANTIC_LEAVE.format(min_h="۲۵", max_h="۲۵") + "\n\n" + _format_panel(settings),
+            MSG_HUMANTIC_LEAVE.format(min_h="۲۵", max_h="۳۰") + "\n\n" + _format_panel(settings),
             reply_markup=humantic_manage_inline(settings),
         )
     elif data.startswith("hum_sleep_acc_"):
         from bot.keyboards import HUMANTIC_SLEEP_ACC_PRESETS
         suffix = data.replace("hum_sleep_acc_", "")
-        for days, s, _ in HUMANTIC_SLEEP_ACC_PRESETS:
+        for min_days, max_days, s, label in HUMANTIC_SLEEP_ACC_PRESETS:
             if s == suffix:
-                await db.update_humantic_settings(account_sleep_days=days)
+                await db.update_humantic_settings(
+                    account_sleep_min_days=min_days,
+                    account_sleep_max_days=max_days,
+                    account_sleep_days=(min_days + max_days) / 2,  # Keep for backward compatibility
+                )
                 settings = await db.get_humantic_settings()
-                label = "۱" if days == 1 else "۲" if days == 2 else "۳" if days == 3 else "۵" if days == 5 else "۷"
                 await q.edit_message_text(
                     MSG_HUMANTIC_SLEEP_ACC.format(days=label) + "\n\n" + _format_panel(settings),
                     reply_markup=humantic_manage_inline(settings),
@@ -132,9 +137,13 @@ async def humantic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     elif data.startswith("hum_sleep_sys_"):
         from bot.keyboards import HUMANTIC_SLEEP_SYS_PRESETS
         suffix = data.replace("hum_sleep_sys_", "")
-        for hours, s, label in HUMANTIC_SLEEP_SYS_PRESETS:
+        for min_hours, max_hours, s, label in HUMANTIC_SLEEP_SYS_PRESETS:
             if s == suffix:
-                await db.update_humantic_settings(system_sleep_hours=hours)
+                await db.update_humantic_settings(
+                    system_sleep_min_hours=min_hours,
+                    system_sleep_max_hours=max_hours,
+                    system_sleep_hours=(min_hours + max_hours) / 2,  # Keep for backward compatibility
+                )
                 settings = await db.get_humantic_settings()
                 await q.edit_message_text(
                     MSG_HUMANTIC_SLEEP_SYS.format(hours=label) + "\n\n" + _format_panel(settings),

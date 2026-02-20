@@ -153,11 +153,33 @@ async def _ensure_tables() -> None:
                 await cur.execute("ALTER TABLE humantic_settings ADD COLUMN system_sleep_hours DECIMAL(3,1) NULL")
             except Exception:
                 pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN account_sleep_min_days DECIMAL(3,1) NULL")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN account_sleep_max_days DECIMAL(3,1) NULL")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN system_sleep_min_hours DECIMAL(3,1) NULL")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN system_sleep_max_hours DECIMAL(3,1) NULL")
+            except Exception:
+                pass
             await cur.execute(
                 "INSERT IGNORE INTO humantic_settings (id, enabled, run_interval_hours, leave_after_min_hours, leave_after_max_hours) VALUES (1, 0, 5, 2, 6)"
             )
             await cur.execute(
                 "UPDATE humantic_settings SET run_interval_min_hours = COALESCE(run_interval_min_hours, run_interval_hours), run_interval_max_hours = COALESCE(run_interval_max_hours, run_interval_hours) WHERE id = 1"
+            )
+            await cur.execute(
+                "UPDATE humantic_settings SET account_sleep_min_days = COALESCE(account_sleep_min_days, account_sleep_days, 3), account_sleep_max_days = COALESCE(account_sleep_max_days, account_sleep_days, 5) WHERE id = 1"
+            )
+            await cur.execute(
+                "UPDATE humantic_settings SET system_sleep_min_hours = COALESCE(system_sleep_min_hours, system_sleep_hours, 0.5), system_sleep_max_hours = COALESCE(system_sleep_max_hours, system_sleep_hours, 2.0) WHERE id = 1"
             )
     logger.info("Tables ensured")
     await ensure_main_node_if_empty()
@@ -444,8 +466,12 @@ async def get_humantic_settings() -> dict[str, Any]:
             "leave_after_min_hours": 2.0,
             "leave_after_max_hours": 6.0,
             "account_sleep_days": 3.0,
+            "account_sleep_min_days": 3.0,
+            "account_sleep_max_days": 5.0,
             "system_sleep_days": 1.0,
             "system_sleep_hours": 1.0,
+            "system_sleep_min_hours": 0.5,
+            "system_sleep_max_hours": 2.0,
             "system_sleep_until": None,
         }
     row = dict(row)
@@ -455,10 +481,18 @@ async def get_humantic_settings() -> dict[str, Any]:
         row["run_interval_max_hours"] = row.get("run_interval_hours") or 6.0
     if row.get("account_sleep_days") is None:
         row["account_sleep_days"] = 3.0
+    if row.get("account_sleep_min_days") is None:
+        row["account_sleep_min_days"] = row.get("account_sleep_days") or 3.0
+    if row.get("account_sleep_max_days") is None:
+        row["account_sleep_max_days"] = row.get("account_sleep_days") or 5.0
     if row.get("system_sleep_days") is None:
         row["system_sleep_days"] = 1.0
     if row.get("system_sleep_hours") is None:
         row["system_sleep_hours"] = 1.0
+    if row.get("system_sleep_min_hours") is None:
+        row["system_sleep_min_hours"] = row.get("system_sleep_hours") or 0.5
+    if row.get("system_sleep_max_hours") is None:
+        row["system_sleep_max_hours"] = row.get("system_sleep_hours") or 2.0
     return row
 
 
@@ -470,8 +504,12 @@ async def update_humantic_settings(
     leave_after_min_hours: float | None = None,
     leave_after_max_hours: float | None = None,
     account_sleep_days: float | None = None,
+    account_sleep_min_days: float | None = None,
+    account_sleep_max_days: float | None = None,
     system_sleep_days: float | None = None,
     system_sleep_hours: float | None = None,
+    system_sleep_min_hours: float | None = None,
+    system_sleep_max_hours: float | None = None,
     last_run_at: str | None = None,
     system_sleep_until: str | None = None,
 ) -> None:
@@ -498,12 +536,24 @@ async def update_humantic_settings(
     if account_sleep_days is not None:
         updates.append("account_sleep_days = %s")
         values.append(account_sleep_days)
+    if account_sleep_min_days is not None:
+        updates.append("account_sleep_min_days = %s")
+        values.append(account_sleep_min_days)
+    if account_sleep_max_days is not None:
+        updates.append("account_sleep_max_days = %s")
+        values.append(account_sleep_max_days)
     if system_sleep_days is not None:
         updates.append("system_sleep_days = %s")
         values.append(system_sleep_days)
     if system_sleep_hours is not None:
         updates.append("system_sleep_hours = %s")
         values.append(system_sleep_hours)
+    if system_sleep_min_hours is not None:
+        updates.append("system_sleep_min_hours = %s")
+        values.append(system_sleep_min_hours)
+    if system_sleep_max_hours is not None:
+        updates.append("system_sleep_max_hours = %s")
+        values.append(system_sleep_max_hours)
     if last_run_at is not None:
         updates.append("last_run_at = %s")
         values.append(last_run_at)
@@ -521,8 +571,14 @@ async def update_humantic_settings(
             )
 
 
-async def set_account_humantic_sleep(account_id: int, days: float = 3) -> None:
-    """Put account into deep sleep for humantic (no actions for this account for `days` days)."""
+async def set_account_humantic_sleep(account_id: int, days: float | None = None) -> None:
+    """Put account into deep sleep for humantic (no actions for this account for random days from range)."""
+    import random
+    if days is None:
+        settings = await get_humantic_settings()
+        min_days = float(settings.get("account_sleep_min_days") or settings.get("account_sleep_days") or 3)
+        max_days = float(settings.get("account_sleep_max_days") or settings.get("account_sleep_days") or 5)
+        days = random.uniform(min_days, max_days)
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -531,8 +587,14 @@ async def set_account_humantic_sleep(account_id: int, days: float = 3) -> None:
             )
 
 
-async def set_system_humantic_sleep(hours: float = 1) -> None:
-    """Put entire humantic system into deep sleep (in hours); admins should be notified by caller."""
+async def set_system_humantic_sleep(hours: float | None = None) -> None:
+    """Put entire humantic system into deep sleep (random hours from range); admins should be notified by caller."""
+    import random
+    if hours is None:
+        settings = await get_humantic_settings()
+        min_hours = float(settings.get("system_sleep_min_hours") or settings.get("system_sleep_hours") or 0.5)
+        max_hours = float(settings.get("system_sleep_max_hours") or settings.get("system_sleep_hours") or 2.0)
+        hours = random.uniform(min_hours, max_hours)
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(

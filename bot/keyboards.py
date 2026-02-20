@@ -113,18 +113,31 @@ HUMANTIC_INTERVAL_PRESETS = [
     (8, 12, "8_12", "۸–۱۲ س"),
     (24, 30, "24_30", "۱ روز"),
 ]
-# Account deep sleep (days): (days, suffix, label)
-HUMANTIC_SLEEP_ACC_PRESETS = [(1, "1", "۱ روز"), (2, "2", "۲ روز"), (3, "3", "۳ روز"), (5, "5", "۵ روز"), (7, "7", "۷ روز")]
-# System deep sleep (hours, 0.5–2): (hours, suffix, label)
-HUMANTIC_SLEEP_SYS_PRESETS = [(0.5, "0_5", "۰.۵ س"), (1.0, "1", "۱ س"), (1.5, "1_5", "۱.۵ س"), (2.0, "2", "۲ س")]
+# Account deep sleep (days): (min_days, max_days, suffix, label)
+HUMANTIC_SLEEP_ACC_PRESETS = [
+    (1, 2, "1_2", "۱–۲ روز"),
+    (2, 3, "2_3", "۲–۳ روز"),
+    (3, 5, "3_5", "۳–۵ روز"),
+    (5, 7, "5_7", "۵–۷ روز"),
+    (7, 10, "7_10", "۷–۱۰ روز"),
+]
+# System deep sleep (hours): (min_hours, max_hours, suffix, label)
+HUMANTIC_SLEEP_SYS_PRESETS = [
+    (0.5, 1.0, "0_5_1", "۰.۵–۱ س"),
+    (1.0, 1.5, "1_1_5", "۱–۱.۵ س"),
+    (1.5, 2.0, "1_5_2", "۱.۵–۲ س"),
+    (2.0, 3.0, "2_3", "۲–۳ س"),
+]
 
 def humantic_manage_inline(settings: dict):
     """Sectioned keyboard: 1–2 buttons per row for easier reading."""
     enabled = settings.get("enabled", False)
     min_h = float(settings.get("run_interval_min_hours") or 4)
     max_h = float(settings.get("run_interval_max_hours") or 6)
-    acc_sleep = float(settings.get("account_sleep_days") or 3)
-    sys_sleep = float(settings.get("system_sleep_hours") or 1)
+    acc_sleep_min = float(settings.get("account_sleep_min_days") or settings.get("account_sleep_days") or 3)
+    acc_sleep_max = float(settings.get("account_sleep_max_days") or settings.get("account_sleep_days") or 5)
+    sys_sleep_min = float(settings.get("system_sleep_min_hours") or settings.get("system_sleep_hours") or 0.5)
+    sys_sleep_max = float(settings.get("system_sleep_max_hours") or settings.get("system_sleep_hours") or 2.0)
     # Section 1: وضعیت
     row_status = [
         InlineKeyboardButton("✅ روشن" + ("" if not enabled else " ✓"), callback_data="hum_on"),
@@ -145,25 +158,25 @@ def humantic_manage_inline(settings: dict):
     row_leave = [
         InlineKeyboardButton("۱–۳ س" + (" ✓" if leave_min == 1 and leave_max == 3 else ""), callback_data="hum_leave_1_3"),
         InlineKeyboardButton("۲–۶ س" + (" ✓" if leave_min == 2 and leave_max == 6 else ""), callback_data="hum_leave_2_6"),
-        InlineKeyboardButton("۲۵ س" + (" ✓" if leave_min == 25 and leave_max == 25 else ""), callback_data="hum_leave_25"),
+        InlineKeyboardButton("۲۵–۳۰ س" + (" ✓" if leave_min == 25 and leave_max == 30 else ""), callback_data="hum_leave_25_30"),
     ]
     # Section 4: خواب اکانت — 2 then 3 per row
     row_acc1 = []
-    for days, suffix, label in HUMANTIC_SLEEP_ACC_PRESETS[:2]:
-        is_cur = abs(acc_sleep - days) < 0.1
+    for min_d, max_d, suffix, label in HUMANTIC_SLEEP_ACC_PRESETS[:2]:
+        is_cur = abs(acc_sleep_min - min_d) < 0.1 and abs(acc_sleep_max - max_d) < 0.1
         row_acc1.append(InlineKeyboardButton(label + (" ✓" if is_cur else ""), callback_data=f"hum_sleep_acc_{suffix}"))
     row_acc2 = []
-    for days, suffix, label in HUMANTIC_SLEEP_ACC_PRESETS[2:]:
-        is_cur = abs(acc_sleep - days) < 0.1
+    for min_d, max_d, suffix, label in HUMANTIC_SLEEP_ACC_PRESETS[2:]:
+        is_cur = abs(acc_sleep_min - min_d) < 0.1 and abs(acc_sleep_max - max_d) < 0.1
         row_acc2.append(InlineKeyboardButton(label + (" ✓" if is_cur else ""), callback_data=f"hum_sleep_acc_{suffix}"))
     # Section 5: خواب سیستم (ساعتی) — 2 per row
     row_sys1 = []
-    for hours, suffix, label in HUMANTIC_SLEEP_SYS_PRESETS[:2]:
-        is_cur = abs(sys_sleep - hours) < 0.1
+    for min_h, max_h, suffix, label in HUMANTIC_SLEEP_SYS_PRESETS[:2]:
+        is_cur = abs(sys_sleep_min - min_h) < 0.1 and abs(sys_sleep_max - max_h) < 0.1
         row_sys1.append(InlineKeyboardButton(label + (" ✓" if is_cur else ""), callback_data=f"hum_sleep_sys_{suffix}"))
     row_sys2 = []
-    for hours, suffix, label in HUMANTIC_SLEEP_SYS_PRESETS[2:]:
-        is_cur = abs(sys_sleep - hours) < 0.1
+    for min_h, max_h, suffix, label in HUMANTIC_SLEEP_SYS_PRESETS[2:]:
+        is_cur = abs(sys_sleep_min - min_h) < 0.1 and abs(sys_sleep_max - max_h) < 0.1
         row_sys2.append(InlineKeyboardButton(label + (" ✓" if is_cur else ""), callback_data=f"hum_sleep_sys_{suffix}"))
     return InlineKeyboardMarkup([
         row_status,

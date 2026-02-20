@@ -13,26 +13,42 @@ from typing import Dict
 
 logger = logging.getLogger(__name__)
 
-# --- Policy 1: Maximum one action per account per second (per account, not global) ---
+# --- Policy 1: Maximum one action per account per random interval (per account, not global) ---
 # Any action (reaction, send message, join, leave, API call, etc.) counts.
-# Each account has its own clock: 10 accounts → up to 10 actions/sec total (1 per account).
+# Each account has its own clock with random delays to avoid synchronization.
+# Delay range: 0.8-1.5 seconds (average ~1.15s) to prevent all accounts acting at once.
 _last_action_finish: Dict[int, float] = {}
-_MIN_SECONDS_BETWEEN_ACTIONS = 1.0
+_MIN_SECONDS_BETWEEN_ACTIONS_MIN = 0.8
+_MIN_SECONDS_BETWEEN_ACTIONS_MAX = 1.5
+_account_delays: Dict[int, float] = {}  # Per-account random delay (recomputed occasionally)
+
+
+def _get_account_delay(account_id: int) -> float:
+    """Get random delay for this account (recomputed occasionally to avoid fixed patterns)."""
+    import random
+    if account_id not in _account_delays or random.random() < 0.1:  # 10% chance to recompute
+        _account_delays[account_id] = random.uniform(
+            _MIN_SECONDS_BETWEEN_ACTIONS_MIN,
+            _MIN_SECONDS_BETWEEN_ACTIONS_MAX
+        )
+    return _account_delays[account_id]
 
 
 async def apply_before_action(account_id: int) -> None:
     """
     Call before performing any single action for this account.
-    Sleeps only if THIS account did an action less than 1 second ago.
-    Other accounts are independent (e.g. 10 accounts = up to 10 actions in the same second).
+    Sleeps only if THIS account did an action less than its random delay ago.
+    Each account has its own random delay (0.8-1.5s) to prevent synchronization.
+    Other accounts are independent (e.g. 10 accounts = up to 10 actions/sec total, but randomized).
     """
     now = time.monotonic()
     last = _last_action_finish.get(account_id)
     if last is not None:
+        required_delay = _get_account_delay(account_id)
         elapsed = now - last
-        if elapsed < _MIN_SECONDS_BETWEEN_ACTIONS:
-            wait = _MIN_SECONDS_BETWEEN_ACTIONS - elapsed
-            logger.debug("Grand policy: account %s wait %.2f s (1 action/sec)", account_id, wait)
+        if elapsed < required_delay:
+            wait = required_delay - elapsed
+            logger.debug("Grand policy: account %s wait %.2f s (random delay %.2f s)", account_id, wait, required_delay)
             await asyncio.sleep(wait)
 
 
@@ -47,8 +63,10 @@ def record_after_action(account_id: int) -> None:
 def reset_account(account_id: int) -> None:
     """Clear policy state for an account (e.g. when switching accounts)."""
     _last_action_finish.pop(account_id, None)
+    _account_delays.pop(account_id, None)
 
 
 def reset_all() -> None:
     """Clear all per-account state (e.g. at start of a new run)."""
     _last_action_finish.clear()
+    _account_delays.clear()

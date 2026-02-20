@@ -101,15 +101,14 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         from bot.messages import MSG_SYSTEM_SLEEP
 
         async def on_account_sleep(aid: int):
-            s = await db.get_humantic_settings()
-            days = float(s.get("account_sleep_days") or 3)
-            await db.set_account_humantic_sleep(aid, days=days)
+            await db.set_account_humantic_sleep(aid)  # Uses random range from settings
 
         async def on_system_sleep():
             s = await db.get_humantic_settings()
-            hours = float(s.get("system_sleep_hours") or 1)
-            await db.set_system_humantic_sleep(hours=hours)
-            msg = MSG_SYSTEM_SLEEP.format(hours=str(hours).replace(".", "/"))
+            min_h = float(s.get("system_sleep_min_hours") or s.get("system_sleep_hours") or 0.5)
+            max_h = float(s.get("system_sleep_max_hours") or s.get("system_sleep_hours") or 2.0)
+            await db.set_system_humantic_sleep()  # Uses random range from settings
+            msg = MSG_SYSTEM_SLEEP.format(hours=f"{min_h:.1f}–{max_h:.1f}".replace(".", "/"))
             for admin_id in await db.list_admin_ids():
                 try:
                     await context.bot.send_message(chat_id=admin_id, text=msg)
