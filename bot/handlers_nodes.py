@@ -14,6 +14,7 @@ import core.limits as limits
 from core.node_runner import check_node_connection
 
 from .filters import ensure_admin
+from .conversation_utils import handle_main_menu_trigger, dispatch_main_menu_action
 from .keyboards import node_manage_inline, node_delete_confirm_inline, node_delete_final_inline, node_main_no_delete_inline, main_admin_keyboard, back_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .messages import (
     MSG_NODES_LIST,
@@ -188,6 +189,10 @@ async def add_node_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_node_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "add_node")
+    if handled and action:
+        await dispatch_main_menu_action(update, context, action)
+        return ConversationHandler.END
     text = (update.message.text or "").strip()
     if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
@@ -201,6 +206,10 @@ async def add_node_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_node_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "add_node")
+    if handled and action:
+        await dispatch_main_menu_action(update, context, action)
+        return ConversationHandler.END
     text = (update.message.text or "").strip()
     if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
@@ -213,6 +222,10 @@ async def add_node_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def add_node_port(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
+        return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "add_node")
+    if handled and action:
+        await dispatch_main_menu_action(update, context, action)
         return ConversationHandler.END
     text = (update.message.text or "").strip()
     if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
@@ -231,6 +244,10 @@ async def add_node_port(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_node_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
         return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "add_node")
+    if handled and action:
+        await dispatch_main_menu_action(update, context, action)
+        return ConversationHandler.END
     text = (update.message.text or "").strip()
     if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         context.user_data.pop("_add_node", None)
@@ -243,6 +260,10 @@ async def add_node_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def add_node_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_admin(update, context):
+        return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "add_node")
+    if handled and action:
+        await dispatch_main_menu_action(update, context, action)
         return ConversationHandler.END
     text = (update.message.text or "").strip()
     if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":

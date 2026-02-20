@@ -19,6 +19,7 @@ from core.config import SESSION_DIR
 
 from .filters import ensure_admin, login_button_filter
 from .keyboards import LOGIN_BUTTON, node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear, BACK_TO_MENU
+from .conversation_utils import handle_main_menu_trigger, dispatch_main_menu_action, cancel_add_node
 from .messages import (
     MSG_CHOOSE_NODE,
     MSG_NO_NODE_CAPACITY,
@@ -71,6 +72,7 @@ async def login_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         logger.info("[LOGIN_ENTRY] no message/text -> END")
         return ConversationHandler.END
+    cancel_add_node(context)  # clear any stale add_node state when entering login
     logger.info("[LOGIN_ENTRY] calling ensure_admin")
     if not await ensure_admin(update, context):
         logger.info("[LOGIN_ENTRY] ensure_admin -> False, END")
@@ -106,6 +108,18 @@ async def login_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return ConversationHandler.END
+
+
+# --- When in CHOOSE_NODE and user sends a text (e.g. main menu button): redirect
+async def login_handle_text_in_choose_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """If user sent a main menu button while choosing node, cancel and start that flow."""
+    if not await ensure_admin(update, context):
+        return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "login")
+    if handled and action:
+        return await dispatch_main_menu_action(update, context, action)
+    await update.message.reply_text("لطفاً از لیست بالا با کلیک روی دکمهٔ نود، یک نود انتخاب کنید.")
+    return CHOOSE_NODE
 
 
 # --- Choose node (inline callback)
@@ -152,6 +166,9 @@ async def login_enter_api_id(update: Update, context: ContextTypes.DEFAULT_TYPE)
     logger.info("[LOGIN_API_ID] text=%r", (update.message.text or "").strip())
     if not await ensure_admin(update, context):
         return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "login")
+    if handled and action:
+        return await dispatch_main_menu_action(update, context, action)
     text = (update.message.text or "").strip()
     if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         await update.message.reply_text(MSG_LOGIN_CANCELLED, reply_markup=main_admin_keyboard())
@@ -172,6 +189,9 @@ async def login_enter_api_hash(update: Update, context: ContextTypes.DEFAULT_TYP
     logger.info("[LOGIN_API_HASH] text len=%s", len((update.message.text or "").strip()))
     if not await ensure_admin(update, context):
         return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "login")
+    if handled and action:
+        return await dispatch_main_menu_action(update, context, action)
     text = (update.message.text or "").strip()
     if BACK_TO_MENU in text or "بازگشت به منو" in text or "انصراف" in text or text.strip() == "بازگشت":
         await update.message.reply_text(MSG_LOGIN_CANCELLED, reply_markup=main_admin_keyboard())
@@ -190,6 +210,9 @@ async def login_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("[LOGIN_PHONE] text=%r", (update.message.text or "").strip()[:20])
     if not await ensure_admin(update, context):
         return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "login")
+    if handled and action:
+        return await dispatch_main_menu_action(update, context, action)
     text = (update.message.text or "").strip()
     if "انصراف" in text or "بازگشت" in text:
         await update.message.reply_text(MSG_LOGIN_CANCELLED, reply_markup=main_admin_keyboard())
@@ -279,6 +302,9 @@ async def login_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("[LOGIN_CODE] text len=%s", len((update.message.text or "").strip()))
     if not await ensure_admin(update, context):
         return ConversationHandler.END
+    handled, action = await handle_main_menu_trigger(update, context, "login")
+    if handled and action:
+        return await dispatch_main_menu_action(update, context, action)
     text = (update.message.text or "").strip()
     # If login already succeeded, "بازگشت به منو" = go to main menu (not "cancelled")
     if context.user_data.get("_login_done"):
@@ -335,6 +361,7 @@ def login_conversation_handler():
         states={
             CHOOSE_NODE: [
                 CallbackQueryHandler(login_choose_node_callback, pattern="^node_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, login_handle_text_in_choose_node),
             ],
             ENTER_API_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, login_enter_api_id),
