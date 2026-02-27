@@ -70,6 +70,14 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         settings = await db.get_humantic_settings()
         actions_enabled = bool(settings.get("actions_enabled", True))
         leave_enabled = bool(settings.get("leave_enabled", True))
+        # First, if leave is enabled, process any joined channels whose leave time has arrived.
+        if leave_enabled:
+            try:
+                from cli_bots.tasks.task_runner import run_leave_joined_channels
+
+                await run_leave_joined_channels()
+            except Exception as e:
+                logger.exception("Leave-joined-channels run failed: %s", e)
         # If هیچ رفتاری فعال نیست، لازم نیست چیزی اجرا شود
         if not actions_enabled and not leave_enabled:
             return

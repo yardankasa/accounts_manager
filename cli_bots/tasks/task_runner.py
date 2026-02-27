@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from telethon import TelegramClient, errors
-from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
 
 from core import db
@@ -130,33 +130,63 @@ async def _check_task_success(client: TelegramClient, bot_entity, original_msg_i
     return False
 
 
-async def _perform_telegram_task(client: TelegramClient, url: str, session_name: str) -> None:
-    """Join channel/group or /start bot based on Telegram link."""
+async def _perform_telegram_task(
+    client: TelegramClient,
+    account_id: int,
+    url: str,
+    session_name: str,
+) -> None:
+    """Join channel/group or /start bot based on Telegram link and record joins for timed leave."""
     url = (url or "").strip()
     if not url:
         return
+    joined_for_later = False
     try:
         if _is_joinchat_link(url):
             hash_part = _extract_joinchat_hash(url)
             if hash_part:
                 await client(ImportChatInviteRequest(hash_part))
                 logger.info("[%s] Joined via invite: %s", session_name, url[:80])
-                return
-        # For normal t.me links, let Telethon resolve entity
-        entity = await client.get_entity(url)
-        # If it's a bot user → send /start
-        if getattr(entity, "bot", False):
-            await client.send_message(entity, "/start")
-            logger.info("[%s] Sent /start to bot from %s", session_name, url[:80])
+                joined_for_later = True
         else:
-            await client(JoinChannelRequest(entity))
-            logger.info("[%s] Joined channel/chat from %s", session_name, url[:80])
+            # For normal t.me links, let Telethon resolve entity
+            entity = await client.get_entity(url)
+            # If it's a bot user → send /start (no leave scheduling)
+            if getattr(entity, "bot", False):
+                await client.send_message(entity, "/start")
+                logger.info("[%s] Sent /start to bot from %s", session_name, url[:80])
+            else:
+                await client(JoinChannelRequest(entity))
+                logger.info("[%s] Joined channel/chat from %s", session_name, url[:80])
+                joined_for_later = True
+        if joined_for_later:
+            # Schedule timed leave based on humantic leave interval settings
+            try:
+                settings = await db.get_humantic_settings()
+                leave_min = float(settings.get("leave_after_min_hours") or 2.0)
+                leave_max = float(settings.get("leave_after_max_hours") or 6.0)
+                leave_after = random.uniform(leave_min, leave_max)
+                await db.record_joined_channel(account_id, url, leave_after)
+                logger.info(
+                    "[%s] Recorded joined channel for timed leave in %.2f h: %s",
+                    session_name,
+                    leave_after,
+                    url[:80],
+                )
+            except Exception as e:
+                logger.warning(
+                    "[%s] Failed to record joined channel for %s: %s",
+                    session_name,
+                    url[:80],
+                    e,
+                )
     except Exception as e:
         logger.warning("[%s] Telegram task failed for %s: %s", session_name, url[:80], e)
 
 
 async def _run_tasks_for_bot(
     client: TelegramClient,
+    account_id: int,
     bot_link: str,
     session_name: str,
 ) -> None:
@@ -202,7 +232,7 @@ async def _run_tasks_for_bot(
         return
 
     # Telegram link: perform the task, then confirm
-    await _perform_telegram_task(client, url, session_name)
+    await _perform_telegram_task(client, account_id, url, session_name)
     await asyncio.sleep(random.uniform(DELAY_BEFORE_CONFIRM_MIN, DELAY_BEFORE_CONFIRM_MAX))
 
     if not confirm_button:
@@ -292,7 +322,7 @@ async def run_tasks_for_all_accounts(main_node_id_only: bool = True) -> None:
                 link = bot.get("link")
                 if not link:
                     continue
-                await _run_tasks_for_bot(client, link, session_name)
+                await _run_tasks_for_bot(client, aid, link, session_name)
         except Exception as e:
             if _is_flood_error(e):
                 logger.warning(
@@ -317,4 +347,84 @@ async def run_tasks_for_all_accounts(main_node_id_only: bool = True) -> None:
                 pass
 
     logger.info("Tasks run finished for all accounts.")
+
+
+async def run_leave_joined_channels(limit_per_run: int = 20) -> None:
+    """Leave channels/groups that reached their scheduled leave time, using humantic leave settings timing."""
+    _ensure_tasks_logger_configured()
+    rows = await db.list_joined_channels_due(limit_per_run)
+    if not rows:
+        return
+
+    from collections import defaultdict
+
+    by_account: dict[int, list[dict]] = defaultdict(list)
+    for row in rows:
+        aid = int(row["account_id"])
+        by_account[aid].append(row)
+
+    logger.info("Leaving %s joined channel(s) across %s account(s).", len(rows), len(by_account))
+
+    for account_id, items in by_account.items():
+        # All rows for this account share the same session data
+        base = items[0]
+        session_path = base.get("session_path")
+        api_id = base.get("api_id")
+        api_hash = base.get("api_hash")
+        phone = (base.get("phone") or "")[:10]
+        if not session_path or not api_id or not api_hash:
+            logger.warning(
+                "Joined-channels leave: account id=%s phone=%s missing session_path/api_id/api_hash, skip.",
+                account_id,
+                phone,
+            )
+            continue
+        session_name = Path(session_path).stem or phone or str(account_id)
+        client = TelegramClient(session_path, int(api_id), api_hash or "")
+        try:
+            await client.connect()
+            if not await client.is_user_authorized():
+                logger.warning(
+                    "[%s] Session not authorized for leave run, skipping account id=%s",
+                    session_name,
+                    account_id,
+                )
+                await client.disconnect()
+                continue
+            for row in items:
+                link = row.get("link") or ""
+                row_id = int(row["id"])
+                if not link:
+                    continue
+                try:
+                    entity = await client.get_entity(link)
+                    await client(LeaveChannelRequest(entity))
+                    logger.info(
+                        "[%s] Left channel/chat from %s (joined_channel_id=%s)",
+                        session_name,
+                        link[:80],
+                        row_id,
+                    )
+                    await db.mark_joined_channel_left(row_id)
+                except Exception as e:
+                    logger.warning(
+                        "[%s] Failed to leave channel/chat %s (joined_channel_id=%s): %s",
+                        session_name,
+                        link[:80],
+                        row_id,
+                        e,
+                    )
+        except Exception as e:
+            logger.exception(
+                "[%s] Leave-joined-channels failed for account id=%s phone=%s: %s",
+                session_name,
+                account_id,
+                phone,
+                e,
+            )
+        finally:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
 

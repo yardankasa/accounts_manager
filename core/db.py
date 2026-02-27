@@ -223,6 +223,18 @@ async def _ensure_tables() -> None:
             await cur.execute(
                 "INSERT IGNORE INTO tasks_settings (id, enabled, run_interval_minutes) VALUES (1, 0, 30)"
             )
+            # Joined channels (for timed leave after join)
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS joined_channels (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    account_id INT NOT NULL,
+                    link VARCHAR(512) NOT NULL,
+                    joined_at DATETIME(6) NOT NULL,
+                    leave_after_hours DECIMAL(4,1) NOT NULL,
+                    left_at DATETIME(6) NULL,
+                    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                )
+            """)
     logger.info("Tables ensured")
     await ensure_main_node_if_empty()
 
@@ -721,4 +733,50 @@ async def update_tasks_settings(
             await cur.execute(
                 f"UPDATE tasks_settings SET {', '.join(updates)} WHERE id = %s",
                 values,
+            )
+
+
+# --- Joined channels scheduled for leave ---
+
+async def record_joined_channel(account_id: int, link: str, leave_after_hours: float) -> None:
+    """Insert a joined channel/group for timed leave later."""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                INSERT INTO joined_channels (account_id, link, joined_at, leave_after_hours)
+                VALUES (%s, %s, NOW(6), %s)
+                """,
+                (account_id, link, leave_after_hours),
+            )
+
+
+async def list_joined_channels_due(limit: int | None = None) -> list[dict[str, Any]]:
+    """Return joined channels whose leave time has arrived (joined_at + leave_after_hours <= now, not left yet)."""
+    async with get_conn() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            sql = """
+                SELECT j.*, a.session_path, a.api_id, a.api_hash, a.phone
+                FROM joined_channels j
+                JOIN accounts a ON a.id = j.account_id
+                WHERE j.left_at IS NULL
+                  AND DATE_ADD(j.joined_at, INTERVAL j.leave_after_hours HOUR) <= NOW(6)
+                ORDER BY j.joined_at
+            """
+            if limit is not None:
+                sql += " LIMIT %s"
+                await cur.execute(sql, (limit,))
+            else:
+                await cur.execute(sql)
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def mark_joined_channel_left(row_id: int) -> None:
+    """Mark a joined channel row as left (leave completed)."""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "UPDATE joined_channels SET left_at = NOW(6) WHERE id = %s",
+                (row_id,),
             )
