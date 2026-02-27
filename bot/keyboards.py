@@ -68,40 +68,23 @@ def account_delete_confirm_inline(account_id: int):
 
 
 def node_manage_inline(nodes: list[dict]):
-    buttons = []
-    for n in nodes:
-        name = n.get("name", f"نود {n['id']}")
-        host = n.get("ssh_host")
-        ip_label = "سرور اصلی" if n.get("is_main") else (host or "—")
-        # Button: name and IP/host (Telegram button text length limit ~64 chars)
-        label = f"🖥 {name} │ {ip_label}" if len(ip_label) < 25 else f"🖥 {name}"
-        buttons.append([InlineKeyboardButton(label, callback_data=f"nodemgr_{n['id']}")])
-    buttons.append([InlineKeyboardButton("➕ افزودن نود جدید", callback_data="nodemgr_add")])
-    buttons.append([InlineKeyboardButton("🔍 بررسی سلامت نودها", callback_data="nodemgr_healthcheck")])
-    return InlineKeyboardMarkup(buttons) if buttons else None
+    """Legacy stub (multi-node mode removed). Not used in single-server mode."""
+    return InlineKeyboardMarkup([])
 
 
 def node_delete_confirm_inline(node_id: int):
-    """First confirmation: Yes / No."""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ بله، حذف کن", callback_data=f"nodedel_yes_{node_id}")],
-        [InlineKeyboardButton("❌ خیر، انصراف", callback_data="nodedel_no")],
-    ])
+    """Legacy stub; node deletion is no longer supported."""
+    return InlineKeyboardMarkup([])
 
 
 def node_delete_final_inline(node_id: int):
-    """Second confirmation: final Yes / No."""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ بله، حذف کنم", callback_data=f"nodedel_final_{node_id}")],
-        [InlineKeyboardButton("❌ خیر، انصراف", callback_data="nodedel_no")],
-    ])
+    """Legacy stub; node deletion is no longer supported."""
+    return InlineKeyboardMarkup([])
 
 
 def node_main_no_delete_inline():
-    """Only 'back' button when viewing main node (not deletable)."""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("◀️ بازگشت به لیست", callback_data="nodedel_no")],
-    ])
+    """Legacy stub; only main node exists in single-server mode."""
+    return InlineKeyboardMarkup([])
 
 
 # --- Humantic actions (مدیریت رفتار انسانی) ---

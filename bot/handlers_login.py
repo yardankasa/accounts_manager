@@ -1,4 +1,4 @@
-"""Login flow: ConversationHandler for node -> phone -> code -> 2FA."""
+"""Login flow: main node -> phone -> code -> 2FA (single-server)."""
 import asyncio
 import logging
 
@@ -18,7 +18,7 @@ import core.node_runner as node_runner
 from core.config import SESSION_DIR
 
 from .filters import ensure_admin, login_button_filter
-from .keyboards import LOGIN_BUTTON, node_choice_inline, back_keyboard, main_admin_keyboard, inline_keyboard_clear, BACK_TO_MENU
+from .keyboards import LOGIN_BUTTON, back_keyboard, main_admin_keyboard, inline_keyboard_clear, BACK_TO_MENU
 from .conversation_utils import handle_main_menu_trigger, dispatch_main_menu_action, cancel_add_node
 from .messages import (
     MSG_CHOOSE_NODE,
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 
-CHOOSE_NODE, ENTER_API_ID, ENTER_API_HASH, ENTER_PHONE, ENTER_CODE = range(5)
+ENTER_API_ID, ENTER_API_HASH, ENTER_PHONE, ENTER_CODE = range(4)
 MAX_WRONG_CODE_ATTEMPTS = 2
 
 
@@ -66,7 +66,7 @@ def _normalize_phone(text: str) -> str | None:
     return s
 
 
-# --- Entry: show node selection
+# --- Entry: always use main node (single-server)
 async def login_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("[LOGIN_ENTRY] called text=%r", getattr(update.message, "text", None))
     if not update.message or not update.message.text:
@@ -80,24 +80,48 @@ async def login_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         context.user_data["_chat_id"] = update.effective_chat.id
         context.user_data["_bot"] = context.bot
-        logger.info("[LOGIN_ENTRY] calling db.list_nodes()")
-        nodes = await db.list_nodes()
-        logger.info("[LOGIN_ENTRY] db.list_nodes() -> %s nodes", len(nodes))
-        nodes_with_remaining = []
-        for n in nodes:
-            logger.info("[LOGIN_ENTRY] calling limits.remaining_logins_today(node_id=%s)", n["id"])
-            rem = await limits.remaining_logins_today(n["id"])
-            logger.info("[LOGIN_ENTRY] limits.remaining_logins_today(%s) -> %s", n["id"], rem)
-            nodes_with_remaining.append((n["id"], n["name"], rem))
-        if not any(r > 0 for _, _, r in nodes_with_remaining):
-            logger.info("[LOGIN_ENTRY] no node capacity, sending MSG_NO_NODE_CAPACITY")
+
+        logger.info("[LOGIN_ENTRY] using main node only (single-server)")
+        main_node_id = await db.get_main_node_id()
+        if main_node_id is None:
+            await update.message.reply_text(
+                "❌ نود اصلی در دیتابیس پیدا نشد. یک‌بار ربات را از ابتدا اجرا کنید تا نود اصلی ساخته شود.",
+                reply_markup=main_admin_keyboard(),
+            )
+            return ConversationHandler.END
+
+        rem = await limits.remaining_logins_today(main_node_id)
+        logger.info("[LOGIN_ENTRY] remaining_logins_today(main_node_id=%s) -> %s", main_node_id, rem)
+        if rem <= 0:
+            logger.info("[LOGIN_ENTRY] no capacity on main node, sending MSG_NO_NODE_CAPACITY")
             await update.message.reply_text(MSG_NO_NODE_CAPACITY, reply_markup=main_admin_keyboard())
             return ConversationHandler.END
-        kb = node_choice_inline(nodes_with_remaining)
-        logger.info("[LOGIN_ENTRY] sending MSG_CHOOSE_NODE")
-        await update.message.reply_text(MSG_CHOOSE_NODE, reply_markup=kb)
-        logger.info("[LOGIN_ENTRY] -> CHOOSE_NODE")
-        return CHOOSE_NODE
+
+        node = await db.get_node(main_node_id)
+        if not node:
+            await update.message.reply_text(
+                "❌ اطلاعات نود اصلی یافت نشد.",
+                reply_markup=main_admin_keyboard(),
+            )
+            return ConversationHandler.END
+
+        ok, msg = await node_runner.check_node_connection(node)
+        logger.info("[LOGIN_ENTRY] check_node_connection(main_node) -> ok=%s msg=%r", ok, msg)
+        if not ok:
+            await update.message.reply_text(msg, reply_markup=main_admin_keyboard())
+            return ConversationHandler.END
+
+        context.user_data["_node_id"] = main_node_id
+        context.user_data["_node"] = node
+
+        logger.info("[LOGIN_ENTRY] -> ENTER_API_ID")
+        await update.message.reply_text(MSG_ENTER_API_ID, reply_markup=inline_keyboard_clear)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=MSG_BACK_HINT,
+            reply_markup=back_keyboard(),
+        )
+        return ENTER_API_ID
     except Exception as e:
         log_exception(logger, "login_entry failed", e)
         try:
@@ -108,57 +132,6 @@ async def login_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return ConversationHandler.END
-
-
-# --- When in CHOOSE_NODE and user sends a text (e.g. main menu button): redirect
-async def login_handle_text_in_choose_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """If user sent a main menu button while choosing node, cancel and start that flow."""
-    if not await ensure_admin(update, context):
-        return ConversationHandler.END
-    handled, action = await handle_main_menu_trigger(update, context, "login")
-    if handled and action:
-        return await dispatch_main_menu_action(update, context, action)
-    await update.message.reply_text("لطفاً از لیست بالا با کلیک روی دکمهٔ نود، یک نود انتخاب کنید.")
-    return CHOOSE_NODE
-
-
-# --- Choose node (inline callback)
-async def login_choose_node_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info("[LOGIN_CHOOSE_NODE] callback data=%r", getattr(update.callback_query, "data", None))
-    if not await ensure_admin(update, context):
-        logger.info("[LOGIN_CHOOSE_NODE] ensure_admin -> False, END")
-        return ConversationHandler.END
-    q = update.callback_query
-    await q.answer()
-    if not q.data or not q.data.startswith("node_"):
-        logger.info("[LOGIN_CHOOSE_NODE] invalid data -> CHOOSE_NODE")
-        return CHOOSE_NODE
-    node_id = int(q.data.split("_")[1])
-    logger.info("[LOGIN_CHOOSE_NODE] calling limits.can_login_on_node(node_id=%s)", node_id)
-    ok, reason = await limits.can_login_on_node(node_id)
-    logger.info("[LOGIN_CHOOSE_NODE] limits.can_login_on_node(%s) -> ok=%s reason=%r", node_id, ok, reason)
-    if not ok:
-        await q.edit_message_text(reason)
-        return ConversationHandler.END
-    logger.info("[LOGIN_CHOOSE_NODE] calling db.get_node(node_id=%s)", node_id)
-    node = await db.get_node(node_id)
-    logger.info("[LOGIN_CHOOSE_NODE] db.get_node(%s) -> %s", node_id, "found" if node else "None")
-    if not node:
-        await q.edit_message_text("نود یافت نشد.")
-        return ConversationHandler.END
-    logger.info("[LOGIN_CHOOSE_NODE] calling node_runner.check_node_connection")
-    ok, msg = await node_runner.check_node_connection(node)
-    logger.info("[LOGIN_CHOOSE_NODE] node_runner.check_node_connection -> ok=%s msg=%r", ok, msg)
-    if not ok:
-        await q.edit_message_text(msg)
-        return CHOOSE_NODE
-    context.user_data["_node_id"] = node_id
-    context.user_data["_node"] = node
-    logger.info("[LOGIN_CHOOSE_NODE] sending MSG_ENTER_API_ID + MSG_BACK_HINT")
-    await q.edit_message_text(MSG_ENTER_API_ID, reply_markup=inline_keyboard_clear)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=MSG_BACK_HINT, reply_markup=back_keyboard())
-    logger.info("[LOGIN_CHOOSE_NODE] -> ENTER_API_ID")
-    return ENTER_API_ID
 
 
 # --- Enter API_ID
@@ -359,10 +332,6 @@ def login_conversation_handler():
             MessageHandler(login_button_filter, login_entry),
         ],
         states={
-            CHOOSE_NODE: [
-                CallbackQueryHandler(login_choose_node_callback, pattern="^node_"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, login_handle_text_in_choose_node),
-            ],
             ENTER_API_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, login_enter_api_id),
             ],

@@ -37,12 +37,7 @@ from bot.handlers_accounts import (
     im_alive_request_callback,
     im_alive_received,
 )
-from bot.handlers_nodes import (
-    nodes_list,
-    node_manage_callback,
-    node_delete_confirm_callback,
-    node_add_conversation_handler,
-)
+from bot.handlers_nodes import nodes_list
 from bot.handlers_humantic import humantic_list, humantic_callback
 from bot.keyboards import HUMANTIC_BUTTON
 
@@ -200,9 +195,6 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.Regex("^(📋 لیست اکانت‌ها|لیست اکانت‌ها)$"), accounts_list))
     app.add_handler(MessageHandler(filters.Regex(f"^({re.escape(HUMANTIC_BUTTON)})$"), humantic_list))
     app.add_handler(CallbackQueryHandler(humantic_callback, pattern="^hum_"))
-    app.add_handler(node_add_conversation_handler())
-    app.add_handler(CallbackQueryHandler(node_manage_callback, pattern="^nodemgr_"))
-    app.add_handler(CallbackQueryHandler(node_delete_confirm_callback, pattern="^nodedel_"))
     app.add_handler(CallbackQueryHandler(account_status_callback, pattern="^statusacc_"))
     app.add_handler(CallbackQueryHandler(im_alive_request_callback, pattern="^im_alive_req_"))
     app.add_handler(CallbackQueryHandler(account_delete_callback, pattern="^delacc_"))

@@ -1,64 +1,34 @@
-"""SSH to nodes and run login script; bridge stdin/stdout with bot."""
-import asyncio
+"""Node runner for main (local) node.
+
+در نسخه فعلی معماری چندنودی و SSH حذف شده و فقط «نود اصلی» که روی همین
+سرور است استفاده می‌شود. این ماژول فقط عملیات روی همان نود اصلی را
+انجام می‌دهد و برای نودهای دیگر صرفاً پیام خطا برمی‌گرداند تا به‌صورت
+ایمن مشخص شود که دیگر پشتیبانی نمی‌شوند.
+"""
+
 import logging
-import tempfile
 from pathlib import Path
 from typing import Awaitable, Callable
 
-import asyncssh
-
 from . import db
-from .config import _APP_ROOT
 
 logger = logging.getLogger(__name__)
 
-# Login worker script path (on main server; we'll copy or reference it for nodes)
-LOGIN_WORKER_NAME = "login_worker.py"
-# When running on node, we assume the script is at same relative path or installed
-LOGIN_WORKER_REMOTE_PATH = "rezabots_login_worker.py"  # deploy this to node; or run via python -c "..." / ssh with script stdin
-
 
 async def check_node_connection(node: dict) -> tuple[bool, str]:
-    """Returns (success, message_in_persian)."""
+    """Check readiness of main node; remote nodes are no longer supported."""
     logger.info("[NODE_RUNNER] check_node_connection(node_id=%s, is_main=%s)", node.get("id"), node.get("is_main"))
     if node.get("is_main"):
-        # Main node: check local session dir
         from .config import SESSION_DIR
+
         try:
             SESSION_DIR.mkdir(parents=True, exist_ok=True)
-            return True, "نود اصلی آماده است."
-        except Exception as e:
+            return True, "نود اصلی (همین سرور) آماده است."
+        except Exception:
             logger.exception("Main node session dir check failed")
             return False, "خطا در ایجاد پوشهٔ نشست روی سرور اصلی."
-    host = node.get("ssh_host")
-    user = node.get("ssh_user")
-    port = int(node.get("ssh_port") or 22)
-    if not host or not user:
-        return False, "نود پیکربندی نشده (میز یا کاربر SSH مشخص نیست)."
-    if not node.get("ssh_password"):
-        return False, "برای نود رمز عبور SSH تنظیم نشده."
-    try:
-        conn = await asyncio.wait_for(
-            asyncssh.connect(
-                host=host,
-                port=port,
-                username=user,
-                password=node["ssh_password"],
-                known_hosts=None,
-            ),
-            timeout=15,
-        )
-        # Quick test + ensure session dir exists
-        result = await conn.run("echo OK && mkdir -p /opt/rezabots/sessions")
-        conn.close()
-        if result.exit_status == 0 and "OK" in (result.stdout or ""):
-            return True, "اتصال به نود برقرار است."
-        return False, "دستور آزمایش روی نود ناموفق بود."
-    except asyncio.TimeoutError:
-        return False, "اتصال به نود زمان‌گذشت. لطفاً بعداً تلاش کنید."
-    except Exception as e:
-        logger.exception("Node connection check failed: %s", e)
-        return False, "خطا در اتصال به نود: " + str(e)[:100]
+    # Any non-main node is considered legacy/unsupported
+    return False, "این نسخه فقط روی سرور اصلی کار می‌کند؛ نودهای SSH دیگر پشتیبانی نمی‌شوند."
 
 
 async def run_login_on_node(
@@ -70,118 +40,45 @@ async def run_login_on_node(
     code_callback: Callable[[], Awaitable[str]],
     password_callback: Callable[[], Awaitable[str | None]],
 ) -> tuple[bool, str, str | None]:
-    """
-    Run Telethon login on remote node. Uses login_worker.py on node.
-    api_id, api_hash: per-account credentials (from user, not .env).
-    code_callback: async function that returns the code when asked.
-    password_callback: async function that returns 2FA password or None.
-    Returns (success, message_persian, session_path_on_node or None).
+    """Run Telethon login.
+
+    در نسخه فعلی فقط نود اصلی (روی همین سرور) پشتیبانی می‌شود.
+    api_id, api_hash: اعتبارهای هر اکانت (از کاربر، نه از .env).
+    code_callback: تابع async که کد را برمی‌گرداند.
+    password_callback: تابع async که رمز دو مرحله‌ای (یا None) را برمی‌گرداند.
+    خروجی: (موفقیت، پیام فارسی، مسیر سشن یا None).
     """
     logger.info("[NODE_RUNNER] run_login_on_node(node_id=%s, phone=%s)", node_id, phone[:6] if len(phone) >= 6 else "***")
     node = await db.get_node(node_id)
     if not node:
         return False, "نود یافت نشد.", None
-    if node.get("is_main"):
-        # Run locally via core.telethon_login
-        from . import telethon_login
-        return await telethon_login.run_login_main(
-            session_base_path=session_base_path,
-            phone=phone,
-            api_id=api_id,
-            api_hash=api_hash,
-            code_callback=code_callback,
-            password_callback=password_callback,
-        )
-    # Remote: SSH and run worker script
-    host = node["ssh_host"]
-    user = node["ssh_user"]
-    port = int(node.get("ssh_port") or 22)
-    password = node.get("ssh_password")
-    if not password:
-        return False, "رمز عبور SSH برای نود تنظیم نشده.", None
+    if not node.get("is_main"):
+        # Safety path for قدیمی‌ها
+        logger.warning("run_login_on_node called for non-main node_id=%s; multi-node is no longer supported.", node_id)
+        return False, "این نسخه فقط از نود اصلی روی همین سرور پشتیبانی می‌کند.", None
+    # Run locally via core.telethon_login
+    from . import telethon_login
 
-    worker_path = _APP_ROOT / "scripts" / "login_worker.py"
-    
-    if not worker_path.exists():
-        return False, "اسکریپت ورود روی سرور یافت نشد.", None
-
-    script_content = worker_path.read_text()
-    remote_script_path = f"/tmp/rezabots_login_worker_{node_id}.py"
-
-    try:
-        conn = await asyncio.wait_for(
-            asyncssh.connect(
-                host=host,
-                port=port,
-                username=user,
-                password=password,
-                known_hosts=None,
-            ),
-            timeout=15,
-        )
-        try:
-            async with conn.start_sftp_client() as sftp:
-                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-                    f.write(script_content)
-                    local_path = f.name
-                try:
-                    await sftp.put(local_path, remote_script_path)
-                finally:
-                    Path(local_path).unlink(missing_ok=True)
-            process = await conn.create_process(
-                f"python3 -u {remote_script_path}",
-                env={"API_ID": str(api_id), "API_HASH": api_hash, "TELEGRAM_PHONE": phone, "SESSION_BASE": session_base_path},
-            )
-            return await _bridge_process(process, code_callback, password_callback, session_base_path, phone)
-        finally:
-            conn.close()
-    except asyncio.TimeoutError:
-        return False, "اتصال به نود زمان‌گذشت.", None
-    except Exception as e:
-        logger.exception("Run login on node failed: %s", e)
-        return False, "خطا در اجرای ورود روی نود: " + str(e)[:80], None
+    return await telethon_login.run_login_main(
+        session_base_path=session_base_path,
+        phone=phone,
+        api_id=api_id,
+        api_hash=api_hash,
+        code_callback=code_callback,
+        password_callback=password_callback,
+    )
 
 
 async def delete_session_on_node(node: dict, session_path: str) -> None:
-    """
-    Delete old session files before re-login. Main node: delete locally.
-    Remote: SSH and run rm.
-    """
-    if node.get("is_main"):
-        from pathlib import Path
-        p = Path(session_path)
-        if p.exists():
-            for f in p.parent.glob(p.name + "*"):
-                try:
-                    f.unlink()
-                except OSError:
-                    pass
+    """Delete old session files before re-login (only local main node)."""
+    p = Path(session_path)
+    if not p.exists():
         return
-    # Remote: SSH and rm
-    host = node.get("ssh_host")
-    user = node.get("ssh_user")
-    port = int(node.get("ssh_port") or 22)
-    password = node.get("ssh_password")
-    if not password:
-        return
-    try:
-        conn = await asyncio.wait_for(
-            asyncssh.connect(
-                host=host,
-                port=port,
-                username=user,
-                password=password,
-                known_hosts=None,
-            ),
-            timeout=15,
-        )
+    for f in p.parent.glob(p.name + "*"):
         try:
-            # Session path is typically /base/phone; Telethon creates /base/phone.session
-            await conn.run(f'rm -f "{session_path}"*')
-        finally:
-            conn.close()
-    except Exception as e:
-        logger.warning("Delete session on remote node failed: %s", e)
+            f.unlink()
+        except OSError:
+            pass
 
 
 async def send_messages_to_bot_on_node(
@@ -192,69 +89,17 @@ async def send_messages_to_bot_on_node(
     bot_username: str,
     messages: list[str],
 ) -> tuple[bool, str]:
-    """
-    Use the account's session to send messages to a bot. Returns (success, error_message).
-    Main node: runs locally. Remote: runs send_msg_worker via SSH.
-    """
+    """Use the account's session to send messages to a bot (main node only)."""
     if not messages:
         return False, "No messages"
-    if node.get("is_main"):
-        from . import session_status
-        return await session_status.send_messages_to_bot(
-            session_path, api_id, api_hash, bot_username, messages
-        )
-    # Remote: SSH and run send_msg_worker
-    host = node.get("ssh_host")
-    user = node.get("ssh_user")
-    port = int(node.get("ssh_port") or 22)
-    password = node.get("ssh_password")
-    if not password:
-        return False, "SSH not configured"
-    worker_path = _APP_ROOT / "scripts" / "send_msg_worker.py"
-    if not worker_path.exists():
-        return False, "Send msg worker not found"
-    script_content = worker_path.read_text()
-    remote_path = f"/tmp/rezabots_send_msg_{node.get('id', 0)}.py"
-    env = {
-        "API_ID": str(api_id),
-        "API_HASH": api_hash,
-        "SESSION_PATH": session_path,
-        "BOT_USERNAME": bot_username.lstrip("@"),
-        "MSG1": messages[0] if messages else "/start",
-        "MSG2": messages[1] if len(messages) > 1 else "",
-    }
-    try:
-        conn = await asyncio.wait_for(
-            asyncssh.connect(
-                host=host,
-                port=port,
-                username=user,
-                password=password,
-                known_hosts=None,
-            ),
-            timeout=15,
-        )
-        try:
-            async with conn.start_sftp_client() as sftp:
-                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-                    f.write(script_content)
-                    local_path = f.name
-                try:
-                    await sftp.put(local_path, remote_path)
-                finally:
-                    Path(local_path).unlink(missing_ok=True)
-            result = await conn.run(f"python3 -u {remote_path}", env=env)
-            out = (result.stdout or "").strip()
-            if out == "OK":
-                return True, ""
-            return False, out.replace("ERROR ", "", 1) if out.startswith("ERROR ") else out or "Unknown"
-        finally:
-            conn.close()
-    except asyncio.TimeoutError:
-        return False, "Connection timeout"
-    except Exception as e:
-        logger.exception("Send to bot on node failed: %s", e)
-        return False, str(e)[:80]
+    if not node.get("is_main"):
+        logger.warning("send_messages_to_bot_on_node called for non-main node; multi-node is disabled.")
+        return False, "فقط نود اصلی (همین سرور) برای ارسال پیام پشتیبانی می‌شود."
+    from . import session_status
+
+    return await session_status.send_messages_to_bot(
+        session_path, api_id, api_hash, bot_username, messages
+    )
 
 
 async def check_session_on_node(
@@ -263,107 +108,11 @@ async def check_session_on_node(
     api_id: int,
     api_hash: str,
 ) -> tuple[bool, str]:
-    """
-    Check if session is active. Returns (is_active, error_or_empty).
-    For main node: runs locally. For remote: runs status_check_worker via SSH.
-    """
-    if node.get("is_main"):
-        from . import session_status
-        ok, err = await session_status.check_session_status(session_path, api_id, api_hash)
-        return ok, err or ""
-    # Remote: SSH and run status worker
-    host = node.get("ssh_host")
-    user = node.get("ssh_user")
-    port = int(node.get("ssh_port") or 22)
-    password = node.get("ssh_password")
-    if not password:
-        return False, "SSH not configured"
-    worker_path = _APP_ROOT / "scripts" / "status_check_worker.py"
-    if not worker_path.exists():
-        return False, "Status worker script not found"
-    script_content = worker_path.read_text()
-    remote_path = f"/tmp/rezabots_status_worker_{node.get('id', 0)}.py"
-    try:
-        conn = await asyncio.wait_for(
-            asyncssh.connect(
-                host=host,
-                port=port,
-                username=user,
-                password=password,
-                known_hosts=None,
-            ),
-            timeout=15,
-        )
-        try:
-            async with conn.start_sftp_client() as sftp:
-                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-                    f.write(script_content)
-                    local_path = f.name
-                try:
-                    await sftp.put(local_path, remote_path)
-                finally:
-                    Path(local_path).unlink(missing_ok=True)
-            result = await conn.run(
-                f"python3 -u {remote_path}",
-                env={
-                    "API_ID": str(api_id),
-                    "API_HASH": api_hash,
-                    "SESSION_PATH": session_path,
-                },
-            )
-            out = (result.stdout or "").strip()
-            if out.startswith("ACTIVE"):
-                return True, ""
-            return False, out.replace("INACTIVE ", "", 1) if out.startswith("INACTIVE ") else out or "Unknown"
-        finally:
-            conn.close()
-    except asyncio.TimeoutError:
-        return False, "Connection timeout"
-    except Exception as e:
-        logger.exception("Check session on node failed: %s", e)
-        return False, str(e)[:80]
+    """Check if session is active (main node only)."""
+    if not node.get("is_main"):
+        logger.warning("check_session_on_node called for non-main node; multi-node is disabled.")
+        return False, "این نسخه فقط وضعیت سشن روی نود اصلی را بررسی می‌کند."
+    from . import session_status
 
-
-async def _bridge_process(process, code_callback, password_callback, session_base_path: str, phone: str):
-    """Read process stdout line by line; when NEED_CODE/NEED_2FA, call callback and write to stdin."""
-    session_path = None
-    buf = ""
-    while True:
-        try:
-            data = await asyncio.wait_for(process.stdout.read(1024), timeout=60.0)
-            if not data:
-                break
-            buf += data.decode("utf-8", errors="replace")
-        except asyncio.TimeoutError:
-            # Check if process exited
-            if process.exit_status is not None:
-                break
-            continue
-        while "\n" in buf or "OK" in buf or "NEED_CODE" in buf or "NEED_2FA" in buf or "ERROR" in buf:
-            line, _, buf = buf.partition("\n")
-            line = line.strip()
-            if not line:
-                continue
-            if line == "NEED_CODE":
-                code = await code_callback()
-                process.stdin.write(code.strip() + "\n")
-                await process.stdin.drain()
-            elif line == "NEED_2FA":
-                pwd = await password_callback()
-                if pwd is None:
-                    process.stdin.write("\n")
-                else:
-                    process.stdin.write(pwd.strip() + "\n")
-                await process.stdin.drain()
-            elif line.startswith("OK "):
-                session_path = line[3:].strip()
-                break
-            elif line.startswith("ERROR "):
-                return False, "خطا: " + line[6:].strip()[:200], None
-        if session_path is not None:
-            break
-    # Wait for process to exit
-    await asyncio.wait_for(process.wait(), timeout=5)
-    if session_path:
-        return True, "ورود با موفقیت انجام شد.", session_path
-    return False, "ورود تکمیل نشد.", None
+    ok, err = await session_status.check_session_status(session_path, api_id, api_hash)
+    return ok, err or ""
