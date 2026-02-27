@@ -72,6 +72,7 @@ async def run_humantic_for_client(
     resume: dict | None,
     on_persist=None,
     include_leave: bool = True,
+    include_join_pv: bool = True,
     log_fn=None,
     phone: str = "",
 ) -> None:
@@ -81,7 +82,7 @@ async def run_humantic_for_client(
     log_fn: async (text: str) -> None to send full-detail logs to IM_ALIVE_CHANNEL_ID.
     """
     seed = f"{run_id}_{account_id}"
-    action_list = build_action_list(seed, include_leave=include_leave)
+    action_list = build_action_list(seed, include_join_pv=include_join_pv, include_leave=include_leave)
     if not action_list:
         logger.info("No actions in pool for account id=%s.", account_id)
         if on_persist:
@@ -134,6 +135,7 @@ def _account_in_sleep(acc: dict) -> bool:
 
 async def run_all_accounts(
     main_node_id_only: bool = True,
+    include_join_pv: bool = True,
     include_leave: bool = True,
     on_account_sleep=None,
     on_system_sleep=None,
@@ -232,8 +234,15 @@ async def run_all_accounts(
             account_ok = True
             try:
                 await run_humantic_for_client(
-                    client, aid, run_id, resume, on_persist=persist, include_leave=include_leave,
-                    log_fn=log_fn, phone=phone,
+                    client,
+                    aid,
+                    run_id,
+                    resume,
+                    on_persist=persist,
+                    include_leave=include_leave,
+                    include_join_pv=include_join_pv,
+                    log_fn=log_fn,
+                    phone=phone,
                 )
             except Exception:
                 account_ok = False
@@ -294,8 +303,13 @@ def main_sync(include_leave: bool = True) -> None:
         await db.init_pool()
         try:
             settings = await db.get_humantic_settings()
+            actions_enabled = bool(settings.get("actions_enabled", True))
             leave_enabled = bool(settings.get("leave_enabled", True))
-            await run_all_accounts(main_node_id_only=True, include_leave=leave_enabled if include_leave else False)
+            await run_all_accounts(
+                main_node_id_only=True,
+                include_join_pv=actions_enabled,
+                include_leave=leave_enabled if include_leave else False,
+            )
         finally:
             await db.close_pool()
 

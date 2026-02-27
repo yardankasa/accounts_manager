@@ -67,9 +67,11 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         from datetime import datetime, timezone
         settings = await db.get_humantic_settings()
-        if not settings.get("enabled"):
-            return
+        actions_enabled = bool(settings.get("actions_enabled", True))
         leave_enabled = bool(settings.get("leave_enabled", True))
+        # If هیچ رفتاری فعال نیست، لازم نیست چیزی اجرا شود
+        if not actions_enabled and not leave_enabled:
+            return
         now = datetime.now(timezone.utc)
         # System deep sleep (e.g. after server-wide flood)
         sys_until = settings.get("system_sleep_until")
@@ -119,6 +121,7 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         asyncio.create_task(run_all_accounts(
             main_node_id_only=True,
+            include_join_pv=actions_enabled,
             include_leave=leave_enabled,
             on_account_sleep=on_account_sleep,
             on_system_sleep=on_system_sleep,

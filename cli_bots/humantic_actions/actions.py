@@ -36,18 +36,19 @@ def _extract_joinchat_hash(link: str) -> str | None:
     return None
 
 
-def build_action_list(seed: str, include_leave: bool = True) -> list[tuple[str, str]]:
+def build_action_list(seed: str, include_join_pv: bool = True, include_leave: bool = True) -> list[tuple[str, str]]:
     """
     Build one flat list of (action_type, link) and shuffle with seed so order is reproducible.
     No fixed sequence: join channel, join chat, pv, leave channel, leave chat all interleaved randomly.
     """
     out: list[tuple[str, str]] = []
-    for ch in get_channels_list():
-        out.append((ACTION_JOIN_CHANNEL, ch["link"]))
-    for c in get_chats_list():
-        out.append((ACTION_JOIN_CHAT, c["link"]))
-    for p in get_pv_list():
-        out.append((ACTION_SEND_PV, p["link"]))
+    if include_join_pv:
+        for ch in get_channels_list():
+            out.append((ACTION_JOIN_CHANNEL, ch["link"]))
+        for c in get_chats_list():
+            out.append((ACTION_JOIN_CHAT, c["link"]))
+        for p in get_pv_list():
+            out.append((ACTION_SEND_PV, p["link"]))
     if include_leave:
         for ch in get_channels_list():
             out.append((ACTION_LEAVE_CHANNEL, ch["link"]))

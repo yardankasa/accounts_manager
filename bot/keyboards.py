@@ -114,7 +114,7 @@ HUMANTIC_SLEEP_SYS_PRESETS = [
 
 def humantic_manage_inline(settings: dict):
     """Sectioned keyboard: 1–2 buttons per row for easier reading."""
-    enabled = settings.get("enabled", False)
+    actions_enabled = settings.get("actions_enabled", True)
     min_h = float(settings.get("run_interval_min_hours") or 4)
     max_h = float(settings.get("run_interval_max_hours") or 6)
     acc_sleep_min = float(settings.get("account_sleep_min_days") or settings.get("account_sleep_days") or 3)
@@ -126,8 +126,8 @@ def humantic_manage_inline(settings: dict):
     sys_sleep_enabled = bool(settings.get("system_sleep_enabled", True))
     # Section 1: وضعیت
     row_status = [
-        InlineKeyboardButton("✅ روشن" + ("" if not enabled else " ✓"), callback_data="hum_on"),
-        InlineKeyboardButton("❌ خاموش" + ("" if enabled else " ✓"), callback_data="hum_off"),
+        InlineKeyboardButton("رفتارها روشن" + (" ✓" if actions_enabled else ""), callback_data="hum_on"),
+        InlineKeyboardButton("رفتارها خاموش" + ("" if actions_enabled else " ✓"), callback_data="hum_off"),
     ]
     # Section 2: فاصله اجرا — 2 then 1 per row
     row_int1 = []

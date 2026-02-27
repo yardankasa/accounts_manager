@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def _format_panel(settings: dict) -> str:
-    status = "روشن ✅" if settings.get("enabled") else "خاموش ❌"
+    actions_status = "روشن ✅" if settings.get("actions_enabled", True) else "خاموش ❌"
     min_h = settings.get("run_interval_min_hours") or settings.get("run_interval_hours") or 4
     max_h = settings.get("run_interval_max_hours") or settings.get("run_interval_hours") or 6
     interval = f"{min_h:.0f}–{max_h:.0f} ساعت"
@@ -40,7 +40,7 @@ def _format_panel(settings: dict) -> str:
     acc_sleep_status = "فعال ✅" if settings.get("account_sleep_enabled", True) else "غیرفعال ❌"
     sys_sleep_status = "فعال ✅" if settings.get("system_sleep_enabled", True) else "غیرفعال ❌"
     return MSG_HUMANTIC_PANEL.format(
-        status=status,
+        actions_status=actions_status,
         interval=interval,
         leave_min=str(leave_min).replace(".", "/"),
         leave_max=str(leave_max).replace(".", "/"),
@@ -77,13 +77,13 @@ async def humantic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     settings = await db.get_humantic_settings()
 
     if data == "hum_on":
-        await db.update_humantic_settings(enabled=True)
+        await db.update_humantic_settings(actions_enabled=True)
         await q.edit_message_text(
             MSG_HUMANTIC_ON + "\n\n" + _format_panel(await db.get_humantic_settings()),
             reply_markup=humantic_manage_inline(await db.get_humantic_settings()),
         )
     elif data == "hum_off":
-        await db.update_humantic_settings(enabled=False)
+        await db.update_humantic_settings(actions_enabled=False)
         await q.edit_message_text(
             MSG_HUMANTIC_OFF + "\n\n" + _format_panel(await db.get_humantic_settings()),
             reply_markup=humantic_manage_inline(await db.get_humantic_settings()),
