@@ -69,6 +69,7 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         settings = await db.get_humantic_settings()
         if not settings.get("enabled"):
             return
+        leave_enabled = bool(settings.get("leave_enabled", True))
         now = datetime.now(timezone.utc)
         # System deep sleep (e.g. after server-wide flood)
         sys_until = settings.get("system_sleep_until")
@@ -96,10 +97,16 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         from bot.messages import MSG_SYSTEM_SLEEP
 
         async def on_account_sleep(aid: int):
+            # Respect per-section toggle for account sleep
+            s = await db.get_humantic_settings()
+            if not s.get("account_sleep_enabled", True):
+                return
             await db.set_account_humantic_sleep(aid)  # Uses random range from settings
 
         async def on_system_sleep():
             s = await db.get_humantic_settings()
+            if not s.get("system_sleep_enabled", True):
+                return
             min_h = float(s.get("system_sleep_min_hours") or s.get("system_sleep_hours") or 0.5)
             max_h = float(s.get("system_sleep_max_hours") or s.get("system_sleep_hours") or 2.0)
             await db.set_system_humantic_sleep()  # Uses random range from settings
@@ -112,7 +119,7 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         asyncio.create_task(run_all_accounts(
             main_node_id_only=True,
-            include_leave=True,
+            include_leave=leave_enabled,
             on_account_sleep=on_account_sleep,
             on_system_sleep=on_system_sleep,
             bot=context.bot,

@@ -1,0 +1,7 @@
+{
+    "bot_links": [
+        {"name": "StarsovGamesBot", "link": "https://t.me/StarsovGamesBot","id": -100},
+        {"name": "StarsMakeBot", "link": "https://t.me/StarsMakeBot","id": -100},
+        {"name": "StarsovEarnBot", "link": "https://t.me/StarsovEarnBot","id": -100}
+    ]
+}

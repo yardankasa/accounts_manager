@@ -121,6 +121,9 @@ async def _ensure_tables() -> None:
                     leave_after_max_hours DECIMAL(4,1) NOT NULL DEFAULT 6,
                     last_run_at DATETIME(6) NULL,
                     system_sleep_until DATETIME(6) NULL,
+                    leave_enabled TINYINT(1) NOT NULL DEFAULT 1,
+                    account_sleep_enabled TINYINT(1) NOT NULL DEFAULT 1,
+                    system_sleep_enabled TINYINT(1) NOT NULL DEFAULT 1,
                     updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
                     CHECK (id = 1)
                 )
@@ -167,6 +170,18 @@ async def _ensure_tables() -> None:
                 pass
             try:
                 await cur.execute("ALTER TABLE humantic_settings ADD COLUMN system_sleep_max_hours DECIMAL(3,1) NULL")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN leave_enabled TINYINT(1) NOT NULL DEFAULT 1")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN account_sleep_enabled TINYINT(1) NOT NULL DEFAULT 1")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE humantic_settings ADD COLUMN system_sleep_enabled TINYINT(1) NOT NULL DEFAULT 1")
             except Exception:
                 pass
             await cur.execute(
@@ -473,6 +488,9 @@ async def get_humantic_settings() -> dict[str, Any]:
             "system_sleep_min_hours": 0.5,
             "system_sleep_max_hours": 2.0,
             "system_sleep_until": None,
+            "leave_enabled": True,
+            "account_sleep_enabled": True,
+            "system_sleep_enabled": True,
         }
     row = dict(row)
     if row.get("run_interval_min_hours") is None:
@@ -493,6 +511,12 @@ async def get_humantic_settings() -> dict[str, Any]:
         row["system_sleep_min_hours"] = row.get("system_sleep_hours") or 0.5
     if row.get("system_sleep_max_hours") is None:
         row["system_sleep_max_hours"] = row.get("system_sleep_hours") or 2.0
+    if row.get("leave_enabled") is None:
+        row["leave_enabled"] = 1
+    if row.get("account_sleep_enabled") is None:
+        row["account_sleep_enabled"] = 1
+    if row.get("system_sleep_enabled") is None:
+        row["system_sleep_enabled"] = 1
     return row
 
 
@@ -512,6 +536,9 @@ async def update_humantic_settings(
     system_sleep_max_hours: float | None = None,
     last_run_at: str | None = None,
     system_sleep_until: str | None = None,
+    leave_enabled: bool | None = None,
+    account_sleep_enabled: bool | None = None,
+    system_sleep_enabled: bool | None = None,
 ) -> None:
     updates = []
     values = []
@@ -560,6 +587,15 @@ async def update_humantic_settings(
     if system_sleep_until is not None:
         updates.append("system_sleep_until = %s")
         values.append(system_sleep_until)
+    if leave_enabled is not None:
+        updates.append("leave_enabled = %s")
+        values.append(1 if leave_enabled else 0)
+    if account_sleep_enabled is not None:
+        updates.append("account_sleep_enabled = %s")
+        values.append(1 if account_sleep_enabled else 0)
+    if system_sleep_enabled is not None:
+        updates.append("system_sleep_enabled = %s")
+        values.append(1 if system_sleep_enabled else 0)
     if not updates:
         return
     values.append(1)

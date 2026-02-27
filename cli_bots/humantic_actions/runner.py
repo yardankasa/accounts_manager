@@ -293,7 +293,9 @@ def main_sync(include_leave: bool = True) -> None:
     async def _run() -> None:
         await db.init_pool()
         try:
-            await run_all_accounts(main_node_id_only=True, include_leave=include_leave)
+            settings = await db.get_humantic_settings()
+            leave_enabled = bool(settings.get("leave_enabled", True))
+            await run_all_accounts(main_node_id_only=True, include_leave=leave_enabled if include_leave else False)
         finally:
             await db.close_pool()
 

@@ -121,6 +121,9 @@ def humantic_manage_inline(settings: dict):
     acc_sleep_max = float(settings.get("account_sleep_max_days") or settings.get("account_sleep_days") or 5)
     sys_sleep_min = float(settings.get("system_sleep_min_hours") or settings.get("system_sleep_hours") or 0.5)
     sys_sleep_max = float(settings.get("system_sleep_max_hours") or settings.get("system_sleep_hours") or 2.0)
+    leave_enabled = bool(settings.get("leave_enabled", True))
+    acc_sleep_enabled = bool(settings.get("account_sleep_enabled", True))
+    sys_sleep_enabled = bool(settings.get("system_sleep_enabled", True))
     # Section 1: وضعیت
     row_status = [
         InlineKeyboardButton("✅ روشن" + ("" if not enabled else " ✓"), callback_data="hum_on"),
@@ -135,7 +138,11 @@ def humantic_manage_inline(settings: dict):
     for lo, hi, suffix, label in HUMANTIC_INTERVAL_PRESETS[2:]:
         is_cur = abs((min_h - lo) + (max_h - hi)) < 0.1
         row_int2.append(InlineKeyboardButton(label + (" ✓" if is_cur else ""), callback_data=f"hum_int_{suffix}"))
-    # Section 3: ترک (leave channels/chats after X hours)
+    # Section 3: ترک (leave channels/chats after X hours) — toggle + presets
+    row_leave_toggle = [
+        InlineKeyboardButton("ترک روشن" + (" ✓" if leave_enabled else ""), callback_data="hum_leave_on"),
+        InlineKeyboardButton("ترک خاموش" + ("" if leave_enabled else " ✓"), callback_data="hum_leave_off"),
+    ]
     leave_min = float(settings.get("leave_after_min_hours") or 2)
     leave_max = float(settings.get("leave_after_max_hours") or 6)
     row_leave = [
@@ -143,7 +150,11 @@ def humantic_manage_inline(settings: dict):
         InlineKeyboardButton("۲–۶ س" + (" ✓" if leave_min == 2 and leave_max == 6 else ""), callback_data="hum_leave_2_6"),
         InlineKeyboardButton("۲۵–۳۰ س" + (" ✓" if leave_min == 25 and leave_max == 30 else ""), callback_data="hum_leave_25_30"),
     ]
-    # Section 4: خواب اکانت — 2 then 3 per row
+    # Section 4: خواب اکانت — toggle + 2 then 3 per row
+    row_acc_toggle = [
+        InlineKeyboardButton("خواب اکانت روشن" + (" ✓" if acc_sleep_enabled else ""), callback_data="hum_sleep_acc_on"),
+        InlineKeyboardButton("خواب اکانت خاموش" + ("" if acc_sleep_enabled else " ✓"), callback_data="hum_sleep_acc_off"),
+    ]
     row_acc1 = []
     for min_d, max_d, suffix, label in HUMANTIC_SLEEP_ACC_PRESETS[:2]:
         is_cur = abs(acc_sleep_min - min_d) < 0.1 and abs(acc_sleep_max - max_d) < 0.1
@@ -152,7 +163,11 @@ def humantic_manage_inline(settings: dict):
     for min_d, max_d, suffix, label in HUMANTIC_SLEEP_ACC_PRESETS[2:]:
         is_cur = abs(acc_sleep_min - min_d) < 0.1 and abs(acc_sleep_max - max_d) < 0.1
         row_acc2.append(InlineKeyboardButton(label + (" ✓" if is_cur else ""), callback_data=f"hum_sleep_acc_{suffix}"))
-    # Section 5: خواب سیستم (ساعتی) — 2 per row
+    # Section 5: خواب سیستم (ساعتی) — toggle + 2 per row
+    row_sys_toggle = [
+        InlineKeyboardButton("خواب سیستم روشن" + (" ✓" if sys_sleep_enabled else ""), callback_data="hum_sleep_sys_on"),
+        InlineKeyboardButton("خواب سیستم خاموش" + ("" if sys_sleep_enabled else " ✓"), callback_data="hum_sleep_sys_off"),
+    ]
     row_sys1 = []
     for min_h, max_h, suffix, label in HUMANTIC_SLEEP_SYS_PRESETS[:2]:
         is_cur = abs(sys_sleep_min - min_h) < 0.1 and abs(sys_sleep_max - max_h) < 0.1
@@ -165,9 +180,12 @@ def humantic_manage_inline(settings: dict):
         row_status,
         row_int1,
         row_int2,
+        row_leave_toggle,
         row_leave,
+        row_acc_toggle,
         row_acc1,
         row_acc2,
+        row_sys_toggle,
         row_sys1,
         row_sys2,
     ])

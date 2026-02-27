@@ -14,6 +14,12 @@ from .messages import (
     MSG_HUMANTIC_LEAVE,
     MSG_HUMANTIC_SLEEP_ACC,
     MSG_HUMANTIC_SLEEP_SYS,
+    MSG_HUMANTIC_LEAVE_ON,
+    MSG_HUMANTIC_LEAVE_OFF,
+    MSG_HUMANTIC_SLEEP_ACC_ON,
+    MSG_HUMANTIC_SLEEP_ACC_OFF,
+    MSG_HUMANTIC_SLEEP_SYS_ON,
+    MSG_HUMANTIC_SLEEP_SYS_OFF,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,11 +36,17 @@ def _format_panel(settings: dict) -> str:
     acc_sleep_max = settings.get("account_sleep_max_days") or settings.get("account_sleep_days") or 5
     sys_sleep_min = settings.get("system_sleep_min_hours") or settings.get("system_sleep_hours") or 0.5
     sys_sleep_max = settings.get("system_sleep_max_hours") or settings.get("system_sleep_hours") or 2.0
+    leave_status = "فعال ✅" if settings.get("leave_enabled", True) else "غیرفعال ❌"
+    acc_sleep_status = "فعال ✅" if settings.get("account_sleep_enabled", True) else "غیرفعال ❌"
+    sys_sleep_status = "فعال ✅" if settings.get("system_sleep_enabled", True) else "غیرفعال ❌"
     return MSG_HUMANTIC_PANEL.format(
         status=status,
         interval=interval,
         leave_min=str(leave_min).replace(".", "/"),
         leave_max=str(leave_max).replace(".", "/"),
+        leave_status=leave_status,
+        acc_sleep_status=acc_sleep_status,
+        sys_sleep_status=sys_sleep_status,
         account_sleep_days=f"{acc_sleep_min:.0f}–{acc_sleep_max:.0f}",
         system_sleep_hours=f"{sys_sleep_min:.1f}–{sys_sleep_max:.1f}".replace(".", "/"),
     )
@@ -53,7 +65,7 @@ async def humantic_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def humantic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle inline callbacks: hum_on, hum_off, hum_int_*, hum_leave_*."""
+    """Handle inline callbacks: hum_on/off, hum_int_*, hum_leave_*, hum_sleep_* and toggles."""
     if not await ensure_admin(update, context):
         return
     q = update.callback_query
@@ -150,6 +162,48 @@ async def humantic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     reply_markup=humantic_manage_inline(settings),
                 )
                 break
+    elif data == "hum_leave_on":
+        await db.update_humantic_settings(leave_enabled=True)
+        settings = await db.get_humantic_settings()
+        await q.edit_message_text(
+            MSG_HUMANTIC_LEAVE_ON + "\n\n" + _format_panel(settings),
+            reply_markup=humantic_manage_inline(settings),
+        )
+    elif data == "hum_leave_off":
+        await db.update_humantic_settings(leave_enabled=False)
+        settings = await db.get_humantic_settings()
+        await q.edit_message_text(
+            MSG_HUMANTIC_LEAVE_OFF + "\n\n" + _format_panel(settings),
+            reply_markup=humantic_manage_inline(settings),
+        )
+    elif data == "hum_sleep_acc_on":
+        await db.update_humantic_settings(account_sleep_enabled=True)
+        settings = await db.get_humantic_settings()
+        await q.edit_message_text(
+            MSG_HUMANTIC_SLEEP_ACC_ON + "\n\n" + _format_panel(settings),
+            reply_markup=humantic_manage_inline(settings),
+        )
+    elif data == "hum_sleep_acc_off":
+        await db.update_humantic_settings(account_sleep_enabled=False)
+        settings = await db.get_humantic_settings()
+        await q.edit_message_text(
+            MSG_HUMANTIC_SLEEP_ACC_OFF + "\n\n" + _format_panel(settings),
+            reply_markup=humantic_manage_inline(settings),
+        )
+    elif data == "hum_sleep_sys_on":
+        await db.update_humantic_settings(system_sleep_enabled=True)
+        settings = await db.get_humantic_settings()
+        await q.edit_message_text(
+            MSG_HUMANTIC_SLEEP_SYS_ON + "\n\n" + _format_panel(settings),
+            reply_markup=humantic_manage_inline(settings),
+        )
+    elif data == "hum_sleep_sys_off":
+        await db.update_humantic_settings(system_sleep_enabled=False)
+        settings = await db.get_humantic_settings()
+        await q.edit_message_text(
+            MSG_HUMANTIC_SLEEP_SYS_OFF + "\n\n" + _format_panel(settings),
+            reply_markup=humantic_manage_inline(settings),
+        )
     else:
         await q.edit_message_text(
             _format_panel(settings),
