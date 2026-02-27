@@ -201,6 +201,28 @@ async def _ensure_tables() -> None:
             await cur.execute(
                 "UPDATE humantic_settings SET system_sleep_min_hours = COALESCE(system_sleep_min_hours, system_sleep_hours, 0.5), system_sleep_max_hours = COALESCE(system_sleep_max_hours, system_sleep_hours, 2.0) WHERE id = 1"
             )
+            # Tasks settings (singleton, similar to humantic but simpler)
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS tasks_settings (
+                    id INT PRIMARY KEY DEFAULT 1,
+                    enabled TINYINT(1) NOT NULL DEFAULT 0,
+                    last_run_at DATETIME(6) NULL,
+                    run_interval_minutes INT NOT NULL DEFAULT 30,
+                    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                    CHECK (id = 1)
+                )
+            """)
+            try:
+                await cur.execute("ALTER TABLE tasks_settings ADD COLUMN last_run_at DATETIME(6) NULL")
+            except Exception:
+                pass
+            try:
+                await cur.execute("ALTER TABLE tasks_settings ADD COLUMN run_interval_minutes INT NOT NULL DEFAULT 30")
+            except Exception:
+                pass
+            await cur.execute(
+                "INSERT IGNORE INTO tasks_settings (id, enabled, run_interval_minutes) VALUES (1, 0, 30)"
+            )
     logger.info("Tables ensured")
     await ensure_main_node_if_empty()
 
@@ -649,4 +671,54 @@ async def set_system_humantic_sleep(hours: float | None = None) -> None:
             await cur.execute(
                 "UPDATE humantic_settings SET system_sleep_until = DATE_ADD(NOW(6), INTERVAL %s HOUR) WHERE id = 1",
                 (hours,),
+            )
+
+
+# --- Tasks settings (singleton) ---
+
+async def get_tasks_settings() -> dict[str, Any]:
+    """Return tasks scheduler settings (singleton row, id=1)."""
+    async with get_conn() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT * FROM tasks_settings WHERE id = 1")
+            row = await cur.fetchone()
+    if not row:
+        return {
+            "enabled": False,
+            "last_run_at": None,
+            "run_interval_minutes": 30,
+        }
+    row = dict(row)
+    if row.get("run_interval_minutes") is None:
+        row["run_interval_minutes"] = 30
+    if row.get("enabled") is None:
+        row["enabled"] = 0
+    return row
+
+
+async def update_tasks_settings(
+    enabled: bool | None = None,
+    last_run_at: str | None = None,
+    run_interval_minutes: int | None = None,
+) -> None:
+    """Update tasks_settings row (id=1) with provided fields."""
+    updates: list[str] = []
+    values: list[Any] = []
+    if enabled is not None:
+        updates.append("enabled = %s")
+        values.append(1 if enabled else 0)
+    if last_run_at is not None:
+        updates.append("last_run_at = %s")
+        values.append(last_run_at)
+    if run_interval_minutes is not None:
+        updates.append("run_interval_minutes = %s")
+        values.append(run_interval_minutes)
+    if not updates:
+        return
+    values.append(1)
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                f"UPDATE tasks_settings SET {', '.join(updates)} WHERE id = %s",
+                values,
             )

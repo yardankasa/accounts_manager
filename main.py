@@ -39,7 +39,8 @@ from bot.handlers_accounts import (
 )
 from bot.handlers_nodes import nodes_list
 from bot.handlers_humantic import humantic_list, humantic_callback
-from bot.keyboards import HUMANTIC_BUTTON
+from bot.handlers_tasks import tasks_list, tasks_callback
+from bot.keyboards import HUMANTIC_BUTTON, TASKS_BUTTON
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,34 @@ async def _humantic_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Humantic job failed: %s", e)
 
 
+async def _tasks_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Periodically check tasks_settings and run tasks when enabled and interval elapsed."""
+    try:
+        from datetime import datetime, timezone
+
+        settings = await db.get_tasks_settings()
+        if not settings.get("enabled"):
+            return
+        now = datetime.now(timezone.utc)
+        interval_min = int(settings.get("run_interval_minutes") or 30)
+        last = settings.get("last_run_at")
+        if last is not None:
+            if isinstance(last, str):
+                last = datetime.fromisoformat(last.replace("Z", "+00:00"))
+            if getattr(last, "tzinfo", None) is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if (now - last).total_seconds() < interval_min * 60:
+                return
+
+        await db.update_tasks_settings(last_run_at=now.strftime("%Y-%m-%d %H:%M:%S"))
+        from cli_bots.tasks import run_tasks_for_all_accounts
+
+        asyncio.create_task(run_tasks_for_all_accounts())
+        logger.info("Tasks run started (interval %s min)", interval_min)
+    except Exception as e:
+        logger.exception("Tasks job failed: %s", e)
+
+
 async def _log_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log every incoming message (group -1, non-blocking) for debugging."""
     if update.message and update.message.text is not None:
@@ -155,13 +184,17 @@ def main() -> None:
         await db.init_pool()
         await db.bootstrap_admins_from_env()
         logger.info("DB and admins ready")
-        # Humantic: check every 5 min; run runner when enabled and interval elapsed
+        # Periodic jobs: humantic + tasks
         try:
             if app.job_queue:
+                # Humantic: check every 5 min; run runner when enabled and interval elapsed
                 app.job_queue.run_repeating(_humantic_job, interval=300, first=60)
                 logger.info("Humantic checker scheduled every 5 min")
+                # Tasks: lightweight checker every 5 min; actual interval from DB (run_interval_minutes)
+                app.job_queue.run_repeating(_tasks_job, interval=300, first=90)
+                logger.info("Tasks checker scheduled every 5 min")
         except Exception as e:
-            logger.warning("Could not schedule humantic job: %s", e)
+            logger.warning("Could not schedule periodic jobs: %s", e)
 
     async def post_shutdown(app: Application) -> None:
         await db.close_pool()
@@ -204,7 +237,9 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.Regex("^(🖥 مدیریت نودها|مدیریت نودها)$"), nodes_list))
     app.add_handler(MessageHandler(filters.Regex("^(📋 لیست اکانت‌ها|لیست اکانت‌ها)$"), accounts_list))
     app.add_handler(MessageHandler(filters.Regex(f"^({re.escape(HUMANTIC_BUTTON)})$"), humantic_list))
+    app.add_handler(MessageHandler(filters.Regex(f"^({re.escape(TASKS_BUTTON)})$"), tasks_list))
     app.add_handler(CallbackQueryHandler(humantic_callback, pattern="^hum_"))
+    app.add_handler(CallbackQueryHandler(tasks_callback, pattern="^tasks_"))
     app.add_handler(CallbackQueryHandler(account_status_callback, pattern="^statusacc_"))
     app.add_handler(CallbackQueryHandler(im_alive_request_callback, pattern="^im_alive_req_"))
     app.add_handler(CallbackQueryHandler(account_delete_callback, pattern="^delacc_"))

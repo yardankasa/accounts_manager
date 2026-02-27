@@ -32,12 +32,14 @@ _MAIN_MENU_ENTRIES = [
     ("🖥 مدیریت نودها", "nodes"),
     ("مدیریت نودها", "nodes"),
     ("مدیریت رفتار انسانی", "humantic"),
+    ("⭐ Tasks", "tasks"),
+    ("Tasks", "tasks"),
 ]
 _NORM_TO_ACTION = {_normalize(raw): action for raw, action in _MAIN_MENU_ENTRIES}
 
 
 def get_main_menu_action(text: str) -> str | None:
-    """Return 'login' | 'accounts' | 'nodes' | 'humantic' if text is a main menu button, else None."""
+    """Return 'login' | 'accounts' | 'nodes' | 'humantic' | 'tasks' if text is a main menu button, else None."""
     if not text:
         return None
     return _NORM_TO_ACTION.get(_normalize(text))
@@ -66,7 +68,7 @@ async def handle_main_menu_trigger(
     """
     If the message text is a main menu button, cancel the current conversation and return (True, action).
     from_conv: 'login' or 'add_node'.
-    action: 'login' | 'accounts' | 'nodes' | 'humantic'.
+    action: 'login' | 'accounts' | 'nodes' | 'humantic' | 'tasks'.
     Otherwise return (False, None).
     """
     if not update.message or not update.message.text:
@@ -112,5 +114,9 @@ async def dispatch_main_menu_action(
     if action == "humantic":
         from bot.handlers_humantic import humantic_list
         await humantic_list(update, context)
+        return ConversationHandler.END
+    if action == "tasks":
+        from bot.handlers_tasks import tasks_list
+        await tasks_list(update, context)
         return ConversationHandler.END
     return ConversationHandler.END

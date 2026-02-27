@@ -11,6 +11,8 @@ LOGIN_BUTTON = "Account Loginer"
 
 # Humantic actions admin button
 HUMANTIC_BUTTON = "مدیریت رفتار انسانی"
+# Tasks (stars bots) admin button
+TASKS_BUTTON = "⭐ Tasks"
 
 def main_admin_keyboard():
     return ReplyKeyboardMarkup(
@@ -19,6 +21,7 @@ def main_admin_keyboard():
             [KeyboardButton("🖥 مدیریت نودها")],
             [KeyboardButton("📋 لیست اکانت‌ها")],
             [KeyboardButton(HUMANTIC_BUTTON)],
+            [KeyboardButton(TASKS_BUTTON)],
             [KeyboardButton(BACK_TO_MENU)],
         ],
         resize_keyboard=True,
@@ -189,3 +192,18 @@ def humantic_manage_inline(settings: dict):
         row_sys1,
         row_sys2,
     ])
+
+
+# --- Tasks (Stars bots) ---
+
+def tasks_manage_inline(settings: dict):
+    """Simple panel: enable/disable tasks runner and optional manual run."""
+    enabled = bool(settings.get("enabled", False))
+    row_toggle = [
+        InlineKeyboardButton("Tasks روشن" + (" ✓" if enabled else ""), callback_data="tasks_on"),
+        InlineKeyboardButton("Tasks خاموش" + ("" if enabled else " ✓"), callback_data="tasks_off"),
+    ]
+    row_run = [
+        InlineKeyboardButton("▶️ اجرای دستی یک بار", callback_data="tasks_run_now"),
+    ]
+    return InlineKeyboardMarkup([row_toggle, row_run])
